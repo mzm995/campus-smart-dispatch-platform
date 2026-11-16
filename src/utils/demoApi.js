@@ -340,7 +340,7 @@ function notificationOwner(actor) {
 
 function ensureNotifications(actor) {
   const stored = readJSON(NOTIFY_KEY, null)
-  if (Array.isArray(stored) && stored.length) return stored
+  if (Array.isArray(stored)) return stored
   const seeded = seedNotifications.map((item, index) => ({
     id: item.id || `nt_seed_${index}`,
     ...notificationOwner(actor),
@@ -903,6 +903,49 @@ async function dispatch(pathname, method, body, headers) {
       writeJSON(SESSION_KEY, session)
     }
     return ok({ reset: true })
+  }
+
+  if (url.pathname === '/system/reset-all' && method === 'POST') {
+    const actor = authenticate(headers)
+    requireSuperAdmin(actor)
+    if (String(body?.confirmation || '').trim() !== '重置全部内容') {
+      throw httpError(
+        422,
+        'RESET_CONFIRMATION_REQUIRED',
+        '请输入“重置全部内容”确认本次操作',
+      )
+    }
+    const users = ensureUsers()
+    let avatarsCleared = 0
+    for (const user of users) {
+      if (user.avatarUrl) {
+        user.avatarUrl = ''
+        user.updatedAt = nowIso()
+        avatarsCleared += 1
+      }
+    }
+    saveUsers(users)
+    const sharedDocuments = SHARED_RESOURCES.filter((resource) =>
+      Boolean(readShared(resource)),
+    ).length
+    SHARED_RESOURCES.forEach((resource) => removeKey(sharedKey(resource)))
+    removeKey(NOTIFY_KEY)
+    removeKey(AI_KEY)
+    removeKey(AUDIT_KEY)
+    addAuditLog(actor, '一键重置全部内容', 'all_content', 'demo', {
+      avatarsCleared,
+      sharedDocuments,
+    })
+    return ok({
+      avatarsCleared,
+      sharedDocuments,
+      notifications: 0,
+      aiUsage: 0,
+      auditLogs: 0,
+      uploadedFiles: 0,
+      uploadErrors: 0,
+      currentUser: serializeUser(users.find((user) => user.id === actor.id)),
+    })
   }
 
   const systemUser = url.pathname.match(/^\/system\/users\/([^/]+)$/)

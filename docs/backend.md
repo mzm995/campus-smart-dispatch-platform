@@ -208,6 +208,8 @@ API Key 加密所用随机主密钥默认位于数据库同目录的 `.secrets-k
 | `POST` | `/api/system/ai-provider/test` | 高级管理员 | 发起真实模型连接测试 |
 | `PATCH` | `/api/system/settings` | 高级管理员 | 保存场景与 AI 配置 |
 | `GET` | `/api/system/audit-logs` | 高级管理员 | 最近审计记录 |
+| `POST` | `/api/system/reset-demo` | 高级管理员 | 清除业务记录并恢复内置演示数据 |
+| `POST` | `/api/system/reset-all` | 高级管理员 + 确认短语 | 清空全部业务内容、上传文件、头像、通知、AI 与审计记录 |
 
 统一响应格式：
 

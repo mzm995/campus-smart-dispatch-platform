@@ -286,6 +286,35 @@ async function saveAvatar() {
   }
 }
 
+async function resetAvatarToDefault() {
+  if (avatarUploading.value) return
+  try {
+    await ElMessageBox.confirm(
+      '将移除当前头像并恢复为姓名首字默认样式。',
+      '恢复默认头像',
+      {
+        confirmButtonText: '恢复默认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+  avatarUploading.value = true
+  try {
+    await auth.updateProfile({ avatarUrl: '' })
+    cancelAvatarChange()
+    avatars.upsert(auth.user)
+    await avatars.refresh()
+    ElMessage.success('头像已恢复为默认样式')
+  } catch (error) {
+    ElMessage.error(error?.message || '默认头像恢复失败')
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
 async function handleLogout() {
   try {
     await ElMessageBox.confirm('退出后需要重新登录，云端共享数据仍保留在服务器。', '退出登录', {
@@ -416,6 +445,16 @@ async function handleReset() {
                 @click="saveAvatar"
               >
                 保存头像
+              </el-button>
+              <el-button
+                v-if="auth.avatarUrl && !avatarFile"
+                plain
+                size="small"
+                :disabled="avatarUploading"
+                @click="resetAvatarToDefault"
+              >
+                <el-icon><Refresh /></el-icon>
+                恢复默认头像
               </el-button>
               <el-button
                 v-if="avatarFile"

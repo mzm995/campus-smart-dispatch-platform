@@ -1132,8 +1132,68 @@ try {
     'demo reset did not clear shared documents',
   )
 
+  const resetAllDenied = await request('/system/reset-all', {
+    method: 'POST',
+    token: demoStudentToken,
+    body: { confirmation: '重置全部内容' },
+  })
+  assert(
+    resetAllDenied.status === 403,
+    'student accessed full reset endpoint',
+  )
+  const resetAllUnconfirmed = await request('/system/reset-all', {
+    method: 'POST',
+    token: superToken,
+    body: { confirmation: '重置' },
+  })
+  assert(
+    resetAllUnconfirmed.status === 422 &&
+      resetAllUnconfirmed.json.error.code === 'RESET_CONFIRMATION_REQUIRED',
+    'full reset accepted an incomplete confirmation',
+  )
+  const resetAll = await request('/system/reset-all', {
+    method: 'POST',
+    token: superToken,
+    body: { confirmation: '重置全部内容' },
+  })
+  assert(
+    resetAll.status === 200 &&
+      resetAll.json.data.avatarsCleared >= 1 &&
+      resetAll.json.data.uploadedFiles >= 1 &&
+      resetAll.json.data.currentUser.avatarUrl === '',
+    'full reset did not clear avatars and uploaded files',
+  )
+  const deletedAvatar = await fetch(
+    `http://127.0.0.1:${port}${uploadedImage.json.data.url}`,
+  )
+  assert(deletedAvatar.status === 404, 'full reset left uploaded avatar on disk')
+  const forumAfterFullReset = await request('/shared/forum', { token: superToken })
+  assert(
+    forumAfterFullReset.json.data.document === null,
+    'full reset did not clear shared content',
+  )
+  const auditAfterFullReset = await request('/system/audit-logs', {
+    token: superToken,
+  })
+  assert(
+    auditAfterFullReset.json.data.logs.length === 1 &&
+      auditAfterFullReset.json.data.logs[0].action === '一键重置全部内容',
+    'full reset audit record is incorrect',
+  )
+
   const db = new DatabaseSync(databasePath)
   try {
+    assert(
+      db.prepare('SELECT COUNT(*) AS count FROM users WHERE avatar_url <> ?').get('').count ===
+        0,
+      'full reset left avatar references in users',
+    )
+    assert(
+      db.prepare('SELECT COUNT(*) AS count FROM notifications').get().count === 0 &&
+        db.prepare('SELECT COUNT(*) AS count FROM ai_usage_logs').get().count === 0 &&
+        db.prepare('SELECT COUNT(*) AS count FROM shared_documents').get().count === 0,
+      'full reset left business data in database',
+    )
     const provider = db
       .prepare('SELECT api_key_ciphertext FROM ai_provider_settings WHERE provider = ?')
       .get('deepseek')

@@ -584,10 +584,7 @@ export function seedDatabase(db, { forceDemo = false } = {}) {
       '/system', 0, 1, 'audit', '', agoIso(6),
     ],
   ]
-  if (
-    forceDemo ||
-    Number(db.prepare('SELECT COUNT(*) AS count FROM notifications').get().count) === 0
-  ) {
+  if (forceDemo || isFreshDatabase) {
     for (const item of demoNotifications) insertNotification.run(...item)
   }
 
@@ -605,10 +602,7 @@ export function seedDatabase(db, { forceDemo = false } = {}) {
     ['ai_admin_1', 'u_admin_zhou', 'parse', 'forum', 'deepseek-flash', 'success', 1330, 'demo-zhou-1', '', 31, '{"total_tokens":571}', agoIso(7)],
     ['ai_super_1', 'u_super_admin_fang', 'parse', 'classroom', 'deepseek-flash', 'success', 1280, 'demo-fang-1', '', 35, '{"total_tokens":559}', agoIso(9)],
   ]
-  if (
-    forceDemo ||
-    Number(db.prepare('SELECT COUNT(*) AS count FROM ai_usage_logs').get().count) === 0
-  ) {
+  if (forceDemo || isFreshDatabase) {
     for (const item of demoAiUsage) insertAiUsage.run(...item)
   }
 }
@@ -2199,6 +2193,56 @@ export function createDatabaseRepository(db) {
     }
   }
 
+  function resetAllContent() {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = {
+        avatarsCleared: Number(
+          db.prepare(`
+            UPDATE users
+            SET avatar_url = '', updated_at = ?
+            WHERE avatar_url <> ''
+          `).run(nowIso()).changes,
+        ),
+        sharedDocuments: Number(
+          db.prepare('DELETE FROM shared_documents').run().changes,
+        ),
+        notifications: Number(
+          db.prepare('DELETE FROM notifications').run().changes,
+        ),
+        aiUsage: Number(db.prepare('DELETE FROM ai_usage_logs').run().changes),
+        auditLogs: Number(db.prepare('DELETE FROM audit_logs').run().changes),
+        classroomApplications: Number(
+          db.prepare('DELETE FROM classroom_applications').run().changes,
+        ),
+        roomBlocks: Number(db.prepare('DELETE FROM room_blocks').run().changes),
+        lostfoundWatches: Number(
+          db.prepare('DELETE FROM lostfound_watches').run().changes,
+        ),
+        groupPaymentOrders: Number(
+          db.prepare('DELETE FROM group_payment_orders').run().changes,
+        ),
+        groupLedgerEntries: Number(
+          db.prepare('DELETE FROM group_ledger_entries').run().changes,
+        ),
+        groupPickupTickets: Number(
+          db.prepare('DELETE FROM group_pickup_tickets').run().changes,
+        ),
+        groupDisputes: Number(
+          db.prepare('DELETE FROM group_disputes').run().changes,
+        ),
+        groupActionReceipts: Number(
+          db.prepare('DELETE FROM group_action_receipts').run().changes,
+        ),
+      }
+      db.exec('COMMIT')
+      return result
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   function resetDemoData() {
     db.exec('BEGIN IMMEDIATE')
     try {
@@ -2305,6 +2349,7 @@ export function createDatabaseRepository(db) {
     addAiUsage,
     listAiUsage,
     cleanupExpiredData,
+    resetAllContent,
     resetDemoData,
     health,
   }

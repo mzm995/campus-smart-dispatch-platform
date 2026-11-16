@@ -26,6 +26,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import SceneIcon from '@/components/SceneIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import PermissionManager from './system/PermissionManager.vue'
+import ResetAllContentCard from './system/ResetAllContentCard.vue'
 import { useUserStore } from '@/stores/user'
 import { useDispatchStore } from '@/stores/dispatch'
 import { apiRequest } from '@/utils/api'
@@ -1079,6 +1080,8 @@ function tableRowClass({ row }) {
               API Key 使用 AES-256-GCM 加密保存；浏览器只显示末 4 位，不返回完整密钥。
             </p>
           </SectionCard>
+
+          <ResetAllContentCard />
         </div>
       </div>
 

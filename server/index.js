@@ -202,6 +202,27 @@ async function readBuffer(req, limit = MAX_BODY_BYTES) {
   return Buffer.concat(chunks)
 }
 
+async function clearUploadDirectory() {
+  let entries = []
+  try {
+    entries = await fsp.readdir(UPLOAD_DIR, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+  let uploadedFiles = 0
+  let uploadErrors = 0
+  for (const entry of entries) {
+    if (entry.isDirectory()) continue
+    try {
+      await fsp.unlink(path.join(UPLOAD_DIR, entry.name))
+      uploadedFiles += 1
+    } catch {
+      uploadErrors += 1
+    }
+  }
+  return { uploadedFiles, uploadErrors }
+}
+
 function hasValidImageSignature(buffer, contentType) {
   if (!buffer?.length) return false
   if (contentType === 'image/png') {
@@ -3531,6 +3552,33 @@ async function handleApi(req, res, url) {
       ipAddress: clientIp(req),
     })
     sendSuccess(res, result)
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/system/reset-all') {
+    const actor = requireSuperAdmin(req)
+    const body = await readJson(req)
+    if (String(body.confirmation || '').trim() !== '重置全部内容') {
+      throw new HttpError(
+        422,
+        'RESET_CONFIRMATION_REQUIRED',
+        '请输入“重置全部内容”确认本次操作',
+      )
+    }
+    const result = repo.resetAllContent()
+    const uploads = await clearUploadDirectory()
+    repo.addAuditLog({
+      actorUserId: actor.id,
+      action: '一键重置全部内容',
+      targetType: 'all_content',
+      detail: { ...result, ...uploads },
+      ipAddress: clientIp(req),
+    })
+    sendSuccess(res, {
+      ...result,
+      ...uploads,
+      currentUser: repo.getUserById(actor.id),
+    })
     return
   }
 
