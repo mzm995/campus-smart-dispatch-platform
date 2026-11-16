@@ -29,6 +29,7 @@ import AiBadge from '@/components/AiBadge.vue'
 import ProgressRing from '@/components/ProgressRing.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import LostFoundSupportPanel from './components/LostFoundSupportPanel.vue'
+import LostFoundQueryPanel from './components/LostFoundQueryPanel.vue'
 import { useLostfoundStore } from '@/stores/lostfound'
 import { lostfoundCategories } from '@/mock/seed'
 import { sleep } from '@/utils/aiEngine'
@@ -45,6 +46,68 @@ const rematching = ref(false)
 const dialogVisible = ref(false)
 const detailId = ref('')
 const viewportWidth = ref(typeof window === 'undefined' ? 1024 : window.innerWidth)
+const lostQuery = reactive({
+  item: '',
+  category: '全部类别',
+  color: '',
+  place: '',
+  description: '',
+})
+const queryStarted = ref(false)
+const querySearching = ref(false)
+const watchSaving = ref(false)
+
+const lostQueryHasCriteria = computed(() =>
+  [lostQuery.item, lostQuery.color, lostQuery.place, lostQuery.description].some(
+    (value) => String(value || '').trim(),
+  ) || lostQuery.category !== '全部类别',
+)
+
+const lostQueryResults = computed(() => {
+  if (!queryStarted.value || !lostQueryHasCriteria.value) return []
+  return store.foundPosts
+    .filter((post) => !['resolved', 'claimed_pending'].includes(post.status))
+    .map((post) => {
+      const haystack = `${post.item || ''} ${post.title || ''} ${post.description || ''} ${(
+        post.tags || []
+      ).join(' ')}`
+      const reasons = []
+      let score = 0
+      if (lostQuery.item && haystack.includes(lostQuery.item.trim())) {
+        score += 45
+        reasons.push('物品名称或标题命中')
+      }
+      if (
+        lostQuery.category !== '全部类别' &&
+        post.category === lostQuery.category
+      ) {
+        score += 20
+        reasons.push('类别一致')
+      }
+      if (lostQuery.color && haystack.includes(lostQuery.color.trim())) {
+        score += 15
+        reasons.push('颜色或品牌特征命中')
+      }
+      if (lostQuery.place && `${post.place || ''}`.includes(lostQuery.place.trim())) {
+        score += 15
+        reasons.push('地点相近')
+      }
+      if (lostQuery.description) {
+        const tokens = lostQuery.description
+          .split(/[\s，。；、,.]+/)
+          .filter((token) => token.length >= 2)
+        const hits = tokens.filter((token) => haystack.includes(token)).length
+        if (hits) {
+          score += Math.min(10, hits * 5)
+          reasons.push('补充特征命中')
+        }
+      }
+      return { post, score, reasons }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+})
 
 const typeTabs = computed(() => [
   { key: 'all', label: '全部', count: store.posts.length },
@@ -184,8 +247,58 @@ function claimStatusText(status) {
   }[status] || '处理中'
 }
 
-function goPublish(type = 'lost') {
-  router.push({ path: '/lostfound/publish', query: { type } })
+function goPublish(type = 'lost', criteria = {}) {
+  const query = { type }
+  for (const key of ['item', 'category', 'color', 'place', 'description']) {
+    const value = String(criteria[key] || '').trim()
+    if (value && value !== '全部类别') query[key] = value
+  }
+  router.push({ path: '/lostfound/publish', query })
+}
+
+async function runLostQuery() {
+  if (!lostQueryHasCriteria.value) {
+    ElMessage.warning('请先填写物品名称、类别或特征')
+    return
+  }
+  querySearching.value = true
+  queryStarted.value = true
+  typeFilter.value = 'found'
+  categoryFilter.value = lostQuery.category
+  await sleep(260)
+  querySearching.value = false
+}
+
+async function createSearchWatch() {
+  if (!lostQueryHasCriteria.value || watchSaving.value) return
+  watchSaving.value = true
+  try {
+    await store.createWatch({
+      item: lostQuery.item,
+      category: lostQuery.category === '全部类别' ? '' : lostQuery.category,
+      color: lostQuery.color,
+      place: lostQuery.place,
+      description: lostQuery.description,
+    })
+    ElMessage.success('已创建私有留意任务，不会公开你的寻物信息')
+  } catch (error) {
+    ElMessage.error(error?.message || '创建留意任务失败')
+  } finally {
+    watchSaving.value = false
+  }
+}
+
+async function closeSearchWatch(id) {
+  try {
+    await store.closeWatch(id)
+    ElMessage.success('已停止留意这组条件')
+  } catch (error) {
+    ElMessage.error(error?.message || '停止留意失败')
+  }
+}
+
+function publishFromQuery() {
+  goPublish('lost', lostQuery)
 }
 
 function contactTip() {
@@ -286,14 +399,10 @@ function cancelClaim(claim) {
 
 function openFoundClaim() {
   if (!detail.value || detail.value.type !== 'found') return
-  if (!claimableLostPosts.value.length) {
-    ElMessage.warning('请先发布一条仍在寻找中的寻物信息，再发起认领')
-    return
-  }
   const matchedLost = detailMatches.value
     .map((item) => item.post)
     .find((post) => post.type === 'lost' && claimableLostPosts.value.some((mine) => mine.id === post.id))
-  foundClaimForm.lostPostId = matchedLost?.id || claimableLostPosts.value[0]?.id || ''
+  foundClaimForm.lostPostId = matchedLost?.id || ''
   foundClaimForm.description = ''
   foundClaimForm.contact = '站内联系'
   foundClaimDialogVisible.value = true
@@ -411,6 +520,7 @@ function onResize() {
 
 onMounted(() => {
   window.addEventListener('resize', onResize)
+  store.loadWatches().catch(() => {})
   if (route.query.from === 'ai') {
     router.replace({ path: '/lostfound/publish', query: { ...route.query } })
     return
@@ -418,6 +528,10 @@ onMounted(() => {
   window.setTimeout(() => {
     loading.value = false
   }, 420)
+  if (route.query.found) {
+    const found = store.posts.find((post) => post.id === String(route.query.found))
+    if (found) window.setTimeout(() => openDetail(found), 460)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -429,7 +543,7 @@ onBeforeUnmount(() => {
   <div class="page">
     <PageHeader
       title="失物招领广场"
-      eyebrow="SCENE 02 · 双向匹配"
+      eyebrow="场景 02 · 双向匹配"
       desc="一条寻物、一条招领，AI 在后台做双向特征比对。物品、颜色、地点、时间，都可能是找回它的关键。"
     >
       <template #meta>
@@ -448,6 +562,22 @@ onBeforeUnmount(() => {
         <el-button type="primary" :icon="Plus" @click="goPublish('found')">发布招领</el-button>
       </template>
     </PageHeader>
+
+    <LostFoundQueryPanel
+      v-model:query="lostQuery"
+      :categories="lostfoundCategories"
+      :results="lostQueryResults"
+      :watches="store.watches"
+      :started="queryStarted"
+      :searching="querySearching"
+      :watch-saving="watchSaving"
+      @search="runLostQuery"
+      @publish="publishFromQuery"
+      @watch="createSearchWatch"
+      @open="openDetail"
+      @close="queryStarted = false"
+      @close-watch="closeSearchWatch"
+    />
 
     <div class="grid g3 lf-stats">
       <StatTile label="进行中" :value="openCount" suffix="条" hint="等待线索或认领中" tone="brand" compact>
@@ -656,7 +786,6 @@ onBeforeUnmount(() => {
         >
           <template #publish>
         <div class="card publish-card">
-          <span class="publish-card__glow" aria-hidden="true"></span>
           <div class="row gap-2 wrap">
             <span class="tag-soft tag-soft--brand"><el-icon><MagicStick /></el-icon>AI 文案生成</span>
             <AiBadge ghost small />
@@ -868,7 +997,7 @@ onBeforeUnmount(() => {
                 失物认领
                 <span class="tag-soft tag-soft--teal">发布者核验归属</span>
               </div>
-              <p>先发布寻物信息，再从招领帖发起认领申请。招领发布者通过后，由失主确认领取。</p>
+              <p>查询到招领后可凭私有特征直接认领，无需先公开发布寻物信息；发布者通过后由失主确认领取。</p>
             </div>
           </div>
 
@@ -892,7 +1021,8 @@ onBeforeUnmount(() => {
                 </div>
                 <p>{{ claim.description }}</p>
                 <div class="claim-item__meta">
-                  <span>关联寻物：{{ claim.lostPostTitle }}</span>
+                  <span v-if="claim.lostPostTitle">关联寻物：{{ claim.lostPostTitle }}</span>
+                  <span v-else>直接认领 · 未关联公开寻物帖</span>
                   <span>{{ claim.contact }}</span>
                 </div>
                 <div v-if="claim.status === 'submitted'" class="claim-item__actions">
@@ -946,30 +1076,34 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
+            <div v-else-if="detail.status === 'claimed_pending'" class="notice notice--amber">
+              <el-icon><Clock /></el-icon>
+              <span>招领发布者正在核验另一位失主的认领申请，当前暂不接受重复认领。</span>
+            </div>
             <div v-else-if="detail.status !== 'resolved'" class="found-claim-entry">
               <div class="found-claim-entry__copy">
                 <b>这是你丢失的物品吗？</b>
-                <span v-if="claimableLostPosts.length">选择你发布的寻物信息，提交归属说明后等待招领发布者核验。</span>
-                <span v-else>需要先发布一条寻物信息，才能认领招领物品。</span>
+                <span>
+                  无需先发布寻物信息。提交仅发布者可见的物品特征，由招领发布者核验归属。
+                  <template v-if="claimableLostPosts.length">你也可以关联一条已有寻物信息。</template>
+                </span>
               </div>
               <el-button
-                v-if="claimableLostPosts.length"
                 type="primary"
                 :icon="CircleCheck"
                 @click="openFoundClaim"
               >
                 认领这件物品
               </el-button>
-              <el-button v-else type="primary" @click="goPublish('lost')">先发布寻物信息</el-button>
             </div>
           </template>
 
           <div class="found-claim-steps">
-            <span><b>01</b>发布寻物</span>
+            <span><b>01</b>提交认领</span>
             <i></i>
-            <span><b>02</b>提交认领</span>
+            <span><b>02</b>核验归属</span>
             <i></i>
-            <span><b>03</b>招领人核验</span>
+            <span><b>03</b>通过申请</span>
             <i></i>
             <span><b>04</b>确认领取</span>
           </div>
@@ -1141,11 +1275,16 @@ onBeforeUnmount(() => {
       <div class="found-claim-dialog">
         <div class="notice notice--teal">
           <el-icon><CircleCheck /></el-icon>
-          <span>认领申请会关联你的寻物信息，由招领发布者核验物品归属。</span>
+          <span>可以直接认领，由招领发布者通过私有特征说明核验物品归属；无需先公开发布寻物信息。</span>
         </div>
         <el-form label-position="top">
-          <el-form-item label="关联寻物信息" required>
-            <el-select v-model="foundClaimForm.lostPostId" placeholder="选择你发布的寻物信息" style="width: 100%">
+          <el-form-item v-if="claimableLostPosts.length" label="关联寻物信息（选填）">
+            <el-select
+              v-model="foundClaimForm.lostPostId"
+              clearable
+              placeholder="不关联也可以直接认领"
+              style="width: 100%"
+            >
               <el-option
                 v-for="post in claimableLostPosts"
                 :key="post.id"
@@ -1199,1418 +1338,4 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
-<style scoped>
-/* ---------- 顶部 ---------- */
-.head-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.lf-stats {
-  gap: 14px;
-}
-
-/* ---------- 左侧信息流 ---------- */
-.lf-feed {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-.lf-filter {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-}
-
-.lf-tabs-wrap {
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.lf-tabs-wrap::-webkit-scrollbar {
-  display: none;
-}
-
-.lf-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-}
-
-.lf-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
-}
-
-.lf-tab:hover {
-  color: var(--brand-600);
-}
-
-.lf-tab.is-active {
-  background: var(--surface);
-  color: var(--brand-700);
-  box-shadow: var(--shadow-xs);
-}
-
-.lf-tab__count {
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--text-3);
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.lf-tab.is-active .lf-tab__count {
-  background: var(--brand-50);
-  color: var(--brand-600);
-}
-
-.lf-filter__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.lf-search {
-  width: 288px;
-  max-width: 100%;
-}
-
-.lf-filter__hint {
-  margin-left: auto;
-}
-
-.link-btn {
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--brand-600);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.link-btn:hover {
-  text-decoration: underline;
-}
-
-.lf-cats {
-  gap: 8px;
-}
-
-.lf-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-.lf-empty {
-  overflow: hidden;
-}
-
-/* ---------- 信息卡片 ---------- */
-.post-card {
-  position: relative;
-  overflow: hidden;
-  padding: 17px 18px 15px 22px;
-  cursor: pointer;
-}
-
-.post-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: var(--grad-warm);
-}
-
-.post-card--found::before {
-  background: var(--grad-teal);
-}
-
-.post-card__head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-
-.post-card__no {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-3);
-}
-
-.post-card__time {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  color: var(--text-4);
-  white-space: nowrap;
-}
-
-.post-card__title {
-  margin: 10px 0 0;
-  font-size: 15.5px;
-  font-weight: 680;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  color: var(--text-1);
-  transition: color var(--dur) var(--ease-out);
-}
-
-.post-card:hover .post-card__title {
-  color: var(--brand-600);
-}
-
-.post-card__desc {
-  margin: 6px 0 0;
-  font-size: var(--fs-sm);
-  line-height: 1.65;
-  color: var(--text-2);
-}
-
-.post-card__tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.post-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text-2);
-}
-
-.meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.meta-item .el-icon {
-  color: var(--text-4);
-  font-size: 13px;
-}
-
-.contact-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  margin-left: auto;
-  padding: 0 10px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  color: var(--text-2);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  user-select: none;
-  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
-}
-
-.contact-chip:hover {
-  background: var(--brand-50);
-  color: var(--brand-600);
-}
-
-.contact-chip--lg {
-  height: 34px;
-  margin-left: 0;
-  padding: 0 14px;
-  font-size: var(--fs-sm);
-}
-
-.post-card__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
-}
-
-.match-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  color: var(--text-3);
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-.match-badge--on {
-  background: var(--brand-50);
-  color: var(--brand-700);
-}
-
-.post-card__more {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--brand-600);
-}
-
-/* 骨架 */
-.post-card--sk {
-  cursor: default;
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  padding: 20px 20px 20px 24px;
-}
-
-.post-card--sk::before {
-  background: var(--line-strong);
-}
-
-.sk {
-  height: 12px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, #eef0f7 25%, #f7f8fc 37%, #eef0f7 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-}
-
-.sk--w20 {
-  width: 20%;
-}
-
-.sk--w40 {
-  width: 40%;
-}
-
-.sk--w60 {
-  width: 60%;
-  height: 18px;
-}
-
-.sk--w90 {
-  width: 90%;
-}
-
-/* ---------- 右侧 ---------- */
-.lf-side {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
-}
-
-.pair-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pair {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 12px;
-  border-radius: var(--radius);
-  background: linear-gradient(135deg, var(--brand-50), var(--surface) 72%);
-  border: 1px solid var(--brand-100);
-}
-
-.pair__main {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  flex: 1;
-  min-width: 0;
-}
-
-.pair__line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: left;
-  color: var(--text-1);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.pair__title {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-weight: 600;
-}
-
-.pair__line:hover .pair__title {
-  color: var(--brand-600);
-}
-
-.pair__swap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 2px;
-  color: var(--text-3);
-  font-size: 10px;
-}
-
-.pair__reasons {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-
-.pair__reasons .tag-soft {
-  height: 20px;
-  padding: 0 7px;
-  font-size: 10px;
-}
-
-.pair__view {
-  flex: none;
-  align-self: center;
-}
-
-.pair-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-}
-
-/* 发布入口 */
-.publish-card {
-  position: relative;
-  overflow: hidden;
-  padding: 20px;
-  background: linear-gradient(145deg, #f4f2ff 0%, #eef9f7 100%);
-  border-color: var(--brand-100);
-}
-
-.publish-card__glow {
-  position: absolute;
-  top: -60px;
-  right: -50px;
-  width: 170px;
-  height: 170px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(108, 99, 255, 0.22), transparent 70%);
-  pointer-events: none;
-}
-
-.publish-card__title {
-  position: relative;
-  margin: 12px 0 0;
-  font-size: 17px;
-  font-weight: 720;
-  letter-spacing: -0.02em;
-  line-height: 1.4;
-}
-
-.publish-card__desc {
-  position: relative;
-  margin: 6px 0 0;
-  font-size: var(--fs-sm);
-  line-height: 1.65;
-  color: var(--text-2);
-}
-
-.publish-card__actions {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.publish-card__actions :deep(.el-button) {
-  width: 100%;
-  margin-left: 0;
-}
-
-.publish-card__actions :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-
-/* 小贴士 */
-.tip-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.tip__no {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  margin-top: 1px;
-  border-radius: 8px;
-  background: var(--brand-50);
-  color: var(--brand-600);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.tip b {
-  display: block;
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  color: var(--text-1);
-}
-
-.tip p {
-  margin: 2px 0 0;
-  font-size: var(--fs-xs);
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.tip-foot {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line);
-  color: var(--text-4);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.tip-foot .el-icon {
-  margin-top: 1px;
-  flex: none;
-}
-
-/* ---------- 详情弹窗 ---------- */
-.dlg-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-right: 26px;
-}
-
-.dlg-head__title {
-  margin: 8px 0 0;
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  line-height: 1.4;
-  letter-spacing: -0.02em;
-  color: var(--text-1);
-}
-
-.dlg-head__meta {
-  font-size: 11px;
-  color: var(--text-4);
-  letter-spacing: 0.02em;
-}
-
-.dlg-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-height: 64vh;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.dlg-ai {
-  align-items: flex-start;
-}
-
-.dlg-ai b {
-  font-size: var(--fs-sm);
-}
-
-.dlg-ai p {
-  margin: 2px 0 0;
-  line-height: 1.6;
-  font-size: var(--fs-xs);
-  opacity: 0.9;
-}
-
-.dlg-image {
-  width: 100%;
-  max-height: 240px;
-  object-fit: cover;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-}
-
-.dlg-desc {
-  font-size: var(--fs-base);
-  line-height: 1.75;
-  color: var(--text-2);
-  white-space: pre-line;
-}
-
-.dlg-info {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.dlg-info__item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  min-width: 0;
-}
-
-.dlg-info__item span {
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.dlg-info__item b {
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  color: var(--text-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dlg-tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.dlg-contact {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 13px 14px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  border: 1px dashed var(--line-strong);
-  color: var(--text-2);
-  font-size: var(--fs-sm);
-}
-
-.dlg-contact b {
-  color: var(--text-1);
-}
-
-.dlg-match {
-  padding-top: 4px;
-}
-
-.dlg-match__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.dlg-match__head b {
-  font-size: var(--fs-base);
-  font-weight: 680;
-  color: var(--text-1);
-}
-
-.dlg-match__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.match {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-}
-
-.match__score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 11px;
-  background: var(--surface);
-  border: 1px solid var(--brand-100);
-  line-height: 1;
-}
-
-.match__score b {
-  font-size: 14px;
-  font-weight: 740;
-  color: var(--brand-600);
-  letter-spacing: -0.02em;
-}
-
-.match__score span {
-  font-size: 9px;
-  color: var(--brand-400);
-}
-
-.match__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.match__title {
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: left;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-1);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-.match__title:hover {
-  color: var(--brand-600);
-}
-
-.match__reasons {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.match__reasons .tag-soft {
-  height: 20px;
-  padding: 0 7px;
-  font-size: 10px;
-}
-
-.dlg-match__empty {
-  padding: 16px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  border: 1px dashed var(--line);
-  color: var(--text-3);
-  font-size: var(--fs-xs);
-  line-height: 1.6;
-  text-align: center;
-}
-
-.dlg-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* ---------- 打赏与领取 ---------- */
-.reward-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.reward-tag--none {
-  color: var(--text-3);
-  background: var(--surface-2);
-}
-
-.reward-flow {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 15px;
-  border: 1px solid rgba(245, 166, 35, 0.22);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(145deg, rgba(245, 166, 35, 0.09), rgba(255, 255, 255, 0.94) 55%);
-}
-
-.reward-flow__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-}
-
-.reward-flow__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex: none;
-  border-radius: 12px;
-  color: var(--amber-600);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
-  font-size: 18px;
-}
-
-.reward-flow__title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text-1);
-}
-
-.reward-flow__head p {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.reward-flow__steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.reward-flow__steps span {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.74);
-  font-size: 10.5px;
-  color: var(--text-2);
-}
-
-.reward-flow__steps b {
-  color: var(--amber-600);
-  font-size: 9px;
-  letter-spacing: 0.05em;
-}
-
-.reward-guide {
-  margin: 0;
-  align-items: flex-start;
-}
-
-.claim-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.claim-item {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.claim-item.is-rewarded,
-.claim-item.is-picked_up {
-  border-color: rgba(18, 179, 166, 0.2);
-  background: rgba(18, 179, 166, 0.04);
-}
-
-.claim-item__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.claim-item__head > div {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.claim-item__head strong {
-  font-size: 12px;
-  color: var(--text-1);
-}
-
-.claim-status {
-  font-size: 10px;
-  font-weight: 650;
-  color: var(--text-3);
-}
-
-.claim-status.is-rewarded,
-.claim-status.is-picked_up {
-  color: var(--teal-600);
-}
-
-.claim-status.is-cancelled {
-  color: var(--text-4);
-  text-decoration: line-through;
-}
-
-.claim-item > p {
-  margin: 8px 0;
-  font-size: 11.5px;
-  line-height: 1.65;
-  color: var(--text-2);
-}
-
-.claim-item__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 10px;
-  color: var(--text-3);
-}
-
-.claim-item__meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.claim-item__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px dashed var(--line);
-}
-
-.claim-empty {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 12px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 11px;
-  color: var(--text-3);
-}
-
-.claim-empty span {
-  font-size: 16px;
-}
-
-.claim-empty p {
-  margin: 0;
-  font-size: 11px;
-}
-
-.claim-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 12px;
-  border-top: 1px solid rgba(245, 166, 35, 0.15);
-}
-
-.claim-entry__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 170px;
-}
-
-.claim-entry__copy b {
-  font-size: 11.5px;
-  color: var(--text-1);
-}
-
-.claim-entry__copy span {
-  font-size: 10px;
-  color: var(--text-3);
-}
-
-.claim-entry .notice {
-  width: 100%;
-  margin: 0;
-}
-
-.claim-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.claim-dialog .notice {
-  margin: 0;
-  align-items: flex-start;
-}
-
-.reward-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-}
-
-.reward-dialog__person {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.reward-dialog__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  color: #fff;
-  background: linear-gradient(135deg, var(--amber-500), var(--coral-500));
-  font-weight: 700;
-}
-
-.reward-dialog__person > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.reward-dialog__person strong {
-  font-size: 13px;
-  color: var(--text-1);
-}
-
-.reward-dialog__person span {
-  font-size: 10.5px;
-  color: var(--text-3);
-}
-
-.reward-dialog > p {
-  margin: 0;
-  padding: 11px 12px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  font-size: 11.5px;
-  line-height: 1.65;
-  color: var(--text-2);
-}
-
-.reward-dialog__amount {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.reward-dialog .notice {
-  margin: 0;
-  align-items: flex-start;
-}
-
-.found-claim-flow {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 15px;
-  border: 1px solid rgba(18, 179, 166, 0.2);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(145deg, rgba(18, 179, 166, 0.08), rgba(255, 255, 255, 0.94) 58%);
-}
-
-.found-claim-flow__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-}
-
-.found-claim-flow__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex: none;
-  border-radius: 12px;
-  color: var(--teal-600);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
-  font-size: 18px;
-}
-
-.found-claim-flow__title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text-1);
-}
-
-.found-claim-flow__head p {
-  margin: 4px 0 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.found-claim-item.is-approved {
-  border-color: rgba(18, 179, 166, 0.2);
-  background: rgba(18, 179, 166, 0.05);
-}
-
-.found-claim-item.is-rejected {
-  opacity: 0.7;
-}
-
-.claim-awaiting {
-  margin-top: 9px;
-  padding-top: 9px;
-  border-top: 1px dashed var(--line);
-  font-size: 10.5px;
-  color: var(--teal-600);
-}
-
-.my-found-claim {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.my-found-claim.is-approved {
-  border-color: rgba(18, 179, 166, 0.24);
-  background: rgba(18, 179, 166, 0.05);
-}
-
-.my-found-claim > p {
-  margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.found-claim-entry {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 12px;
-  border-top: 1px solid rgba(18, 179, 166, 0.15);
-}
-
-.found-claim-entry__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex: 1;
-  min-width: 190px;
-}
-
-.found-claim-entry__copy b {
-  font-size: 11.5px;
-  color: var(--text-1);
-}
-
-.found-claim-entry__copy span {
-  font-size: 10px;
-  line-height: 1.55;
-  color: var(--text-3);
-}
-
-.found-claim-steps {
-  display: grid;
-  grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
-  align-items: center;
-  gap: 6px;
-  padding-top: 11px;
-  border-top: 1px dashed rgba(18, 179, 166, 0.16);
-}
-
-.found-claim-steps span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-3);
-  font-size: 9px;
-  white-space: nowrap;
-}
-
-.found-claim-steps b {
-  color: var(--teal-600);
-}
-
-.found-claim-steps i {
-  height: 1px;
-  background: var(--line);
-}
-
-.found-claim-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-}
-
-.found-claim-dialog .notice {
-  margin: 0;
-  align-items: flex-start;
-}
-
-.found-claim-option-reward {
-  float: right;
-  margin-left: 16px;
-  color: var(--amber-600);
-  font-size: 10px;
-}
-
-.found-claim-dialog__reward {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: var(--amber-700);
-  background: var(--amber-50);
-  font-size: 11px;
-}
-
-.found-claim-dialog__reward svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* ---------- 响应式 ---------- */
-@media (max-width: 1180px) {
-  .lf-side {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
-
-  .publish-card {
-    grid-column: span 2;
-  }
-}
-
-@media (max-width: 900px) {
-  .lf-side {
-    display: flex;
-  }
-
-  .publish-card {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 640px) {
-  .lf-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .lf-stats :deep(.stat) {
-    padding: 11px 10px;
-  }
-
-  .lf-stats :deep(.stat__hint),
-  .lf-stats :deep(.stat__icon) {
-    display: none;
-  }
-
-  .lf-stats :deep(.stat__value) {
-    font-size: 20px;
-  }
-
-  .lf-search {
-    width: 100%;
-  }
-
-  .lf-filter__hint {
-    margin-left: 0;
-  }
-
-  .post-card {
-    padding: 15px 14px 13px 18px;
-  }
-
-  .post-card__title {
-    font-size: 15px;
-  }
-
-  .post-card__time {
-    width: 100%;
-    margin-left: 0;
-    order: 5;
-  }
-
-  .contact-chip {
-    margin-left: 0;
-  }
-
-  .pair {
-    padding: 10px;
-    gap: 9px;
-  }
-
-  .pair__view {
-    display: none;
-  }
-
-  .publish-card__actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .post-card__foot {
-    justify-content: flex-start;
-  }
-
-  .dlg-info {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .dlg-body {
-    max-height: 62vh;
-  }
-
-  .dlg-head__title {
-    font-size: var(--fs-lg);
-  }
-
-  .dlg-foot {
-    flex-wrap: wrap;
-  }
-
-  .reward-flow {
-    padding: 12px;
-  }
-
-  .reward-flow__steps {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .claim-entry {
-    align-items: stretch;
-  }
-
-  .claim-entry :deep(.el-button) {
-    flex: 1;
-    margin-left: 0;
-  }
-
-  .reward-dialog__amount {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .reward-dialog__amount :deep(.el-input-number) {
-    width: 100%;
-  }
-
-  .found-claim-flow {
-    padding: 12px;
-  }
-
-  .found-claim-entry {
-    align-items: stretch;
-  }
-
-  .found-claim-entry :deep(.el-button) {
-    flex: 1;
-    margin-left: 0;
-  }
-
-  .found-claim-steps {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .found-claim-steps i {
-    display: none;
-  }
-
-  .found-claim-steps span {
-    flex-direction: column;
-    gap: 2px;
-    white-space: normal;
-  }
-}
-
-@media (max-width: 420px) {
-  .publish-card__actions {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-</style>
+<style scoped src="./LostFoundView.css"></style>

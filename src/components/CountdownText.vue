@@ -49,7 +49,7 @@ const text = computed(() => {
 .cd {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: var(--fs-sm);
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
@@ -60,12 +60,12 @@ const text = computed(() => {
 }
 
 .cd__value {
-  font-weight: 680;
+  font-weight: 600;
   color: var(--amber-600);
 }
 
 .cd--compact {
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .cd--expired .cd__value {

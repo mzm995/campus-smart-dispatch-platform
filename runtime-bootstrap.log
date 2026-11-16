@@ -22,5 +22,17 @@
 [runtime][INFO] Extracting Node.js runtime...
 [runtime][OK] Node.js v24.22.3 is ready at E:\campus-smart-dispatch-platform\runtime\node.exe
 [runtime][INFO] Preparing Node.js runtime (purpose: launcher)
-[runtime][INFO] Project directory: E:\桌面\3333\campus-smart-dispatch-platform
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
 [runtime][OK] Bundled runtime is ready: Node.js v24.22.3

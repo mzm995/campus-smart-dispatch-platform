@@ -15,32 +15,25 @@ const offset = computed(() => circumference.value * (1 - Math.min(100, Math.max(
 const center = computed(() => props.size / 2)
 
 const colors = {
-  brand: ['#6c63ff', '#12b3a6'],
-  teal: ['#12b3a6', '#17c3b2'],
-  amber: ['#f5a623', '#ff7a59'],
-  coral: ['#ff6b6b', '#e5484d'],
-  slate: ['#94a0b8', '#7a869f'],
+  brand: 'var(--brand-500)',
+  teal: 'var(--teal-500)',
+  amber: 'var(--amber-500)',
+  coral: 'var(--coral-500)',
+  slate: 'var(--text-3)',
 }
-const gradient = computed(() => colors[props.tone] || colors.brand)
-const gradId = computed(() => `ringGrad_${props.tone}_${props.size}`)
+const strokeColor = computed(() => colors[props.tone] || colors.brand)
 </script>
 
 <template>
   <div class="ring" :style="{ width: `${size}px`, height: `${size}px` }">
     <svg :width="size" :height="size" :viewBox="`0 0 ${size} ${size}`">
-      <defs>
-        <linearGradient :id="gradId" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" :stop-color="gradient[0]" />
-          <stop offset="1" :stop-color="gradient[1]" />
-        </linearGradient>
-      </defs>
       <circle :cx="center" :cy="center" :r="radius" fill="none" stroke="var(--line)" :stroke-width="stroke" />
       <circle
         :cx="center"
         :cy="center"
         :r="radius"
         fill="none"
-        :stroke="`url(#${gradId})`"
+        :stroke="strokeColor"
         :stroke-width="stroke"
         stroke-linecap="round"
         :stroke-dasharray="circumference"
@@ -86,21 +79,23 @@ const gradId = computed(() => `ringGrad_${props.tone}_${props.size}`)
 }
 
 .ring__value {
-  font-size: 15px;
-  font-weight: 740;
+  font-family: var(--font-serif);
+  font-size: var(--fs-base);
+  font-weight: 600;
   color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
 
 .ring__value small {
-  font-size: 9px;
-  margin-left: 1px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  margin-left: 0px;
   color: var(--text-3);
 }
 
 .ring__caption {
-  margin-top: 2px;
-  font-size: 9px;
+  margin-top: 0px;
+  font-size: var(--fs-xs);
   color: var(--text-3);
 }
 </style>

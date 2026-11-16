@@ -191,27 +191,27 @@ const FAQ_ITEMS = [
 .process-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .process-stats > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 9px 10px;
+  gap: 0px;
+  padding: 8px 8px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
 .process-stats strong {
-  font-size: 17px;
+  font-size: 18px;
   color: var(--text-1);
 }
 
 .process-stats span {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -232,14 +232,14 @@ const FAQ_ITEMS = [
   bottom: 16px;
   left: 14px;
   width: 1px;
-  background: linear-gradient(var(--brand-200), var(--teal-100));
+  background: var(--line-strong);
 }
 
 .process-step {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .process-step__num {
@@ -255,33 +255,33 @@ const FAQ_ITEMS = [
   border-radius: 50%;
   color: var(--brand-600);
   background: var(--brand-100);
-  font-size: 8px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   box-shadow: 0 0 0 1px var(--line);
 }
 
 .process-step > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-top: 1px;
+  gap: 0px;
+  padding-top: 0px;
 }
 
 .process-step strong {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
 .process-step p {
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
 
 .process-step > div > span {
-  margin-top: 2px;
-  font-size: 9px;
+  margin-top: 0px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--brand-600);
 }
@@ -289,16 +289,16 @@ const FAQ_ITEMS = [
 .case-list {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 
 .case-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
@@ -309,11 +309,11 @@ const FAQ_ITEMS = [
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--brand-700);
   background: var(--brand-50);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .case-item__icon.is-teal {
@@ -324,7 +324,7 @@ const FAQ_ITEMS = [
 .case-item__main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
@@ -338,7 +338,7 @@ const FAQ_ITEMS = [
 
 .case-item__head strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-1);
@@ -346,29 +346,29 @@ const FAQ_ITEMS = [
 
 .case-item__reward {
   flex: none;
-  padding: 2px 6px;
-  border-radius: 999px;
+  padding: 0px 4px;
+  border-radius: 4px;
   color: var(--amber-700);
   background: var(--amber-50);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .case-item__meta {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
 .case-item__main p {
-  margin: 3px 0 0;
-  font-size: 9.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
 
 .case-foot {
   width: 100%;
-  margin-top: 9px;
+  margin-top: 8px;
   margin-left: 0;
 }
 
@@ -380,7 +380,7 @@ const FAQ_ITEMS = [
 .lf-faq :deep(.el-collapse-item__header) {
   min-height: 42px;
   height: auto;
-  padding: 9px 0;
+  padding: 8px 0;
   line-height: 1.45;
   background: transparent;
 }
@@ -391,15 +391,15 @@ const FAQ_ITEMS = [
 
 .lf-faq__question {
   padding-right: 8px;
-  font-size: 11px;
-  font-weight: 620;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-2);
 }
 
 .lf-faq__answer {
   margin: 0;
-  padding: 0 12px 10px 0;
-  font-size: 10px;
+  padding: 0 12px 8px 0;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-3);
 }
@@ -409,9 +409,9 @@ const FAQ_ITEMS = [
   align-items: flex-start;
   gap: 8px;
   margin-top: 12px;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid rgba(245, 166, 35, 0.2);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--amber-600);
   background: rgba(245, 166, 35, 0.06);
 }
@@ -419,16 +419,16 @@ const FAQ_ITEMS = [
 .faq-notice > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
 }
 
 .faq-notice strong {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
 .faq-notice span {
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -436,23 +436,21 @@ const FAQ_ITEMS = [
 .faq-contact {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 9px;
-  font-size: 9.5px;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .announce-card {
-  padding: 17px 18px;
-  background:
-    radial-gradient(180px 100px at 100% 0, rgba(108, 99, 255, 0.09), transparent 70%),
-    var(--surface);
+  padding: 16px 16px;
+  background: var(--surface);
 }
 
 .announce-card__head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .announce-card__icon {
@@ -462,27 +460,27 @@ const FAQ_ITEMS = [
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--brand-600);
   background: var(--brand-50);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .announce-card__head > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
 }
 
 .announce-card__head span {
-  font-size: 9px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--brand-600);
 }
 
 .announce-card__head strong {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
@@ -490,7 +488,7 @@ const FAQ_ITEMS = [
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 13px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -499,7 +497,7 @@ const FAQ_ITEMS = [
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 9.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
@@ -508,7 +506,7 @@ const FAQ_ITEMS = [
   flex: none;
   color: var(--brand-500);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 700;
 }
@@ -516,11 +514,11 @@ const FAQ_ITEMS = [
 .announce-card__foot {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-  font-size: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   color: var(--text-4);
 }
 </style>

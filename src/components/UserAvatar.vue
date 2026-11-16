@@ -59,8 +59,8 @@ const rootStyle = computed(() => ({
   justify-content: center;
   flex: none;
   overflow: hidden;
-  color: #fff;
-  font-weight: 700;
+  color: var(--text-invert);
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
 }

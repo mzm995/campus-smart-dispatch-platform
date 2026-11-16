@@ -51,15 +51,14 @@ const more = computed(() => Math.max(0, list.value.length - props.max))
   justify-content: center;
   width: var(--avatar-size);
   height: var(--avatar-size);
-  margin-left: -7px;
+  margin-left: -4px;
   border-radius: 50%;
   border: 2px solid var(--surface);
-  color: #fff;
+  color: var(--text-invert);
   font-size: calc(var(--avatar-size) * 0.36);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
   flex: none;
-  box-shadow: var(--shadow-xs);
 }
 
 .stack__item:first-child {

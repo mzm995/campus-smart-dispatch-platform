@@ -2,10 +2,10 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import dayjs from 'dayjs'
 import { classrooms, classroomFilters } from '@/mock/seed'
-import { recommendClassrooms, roomFreeSlots, sleep } from '@/utils/aiEngine'
-import { uid } from '@/utils/format'
+import { apiRequest, apiUrl, getAuthToken } from '@/utils/api'
 import { loadState } from '@/utils/storage'
-import { bindSharedState } from '@/utils/cloudSync'
+import { recommendClassrooms, roomFreeSlots, sleep } from '@/utils/aiEngine'
+import { nextDate, uid } from '@/utils/format'
 import { useNotifyStore } from './notify'
 import { useUserStore } from './user'
 
@@ -46,11 +46,7 @@ function seedApplications() {
       aiReason: '容量 46 人 ≥ 30 人，配备投影与空调，周三 15:00–17:00 空闲，距 A 栋约 210m。',
       createdAt: dayjs().subtract(2, 'hour').toISOString(),
       reviewedAt: dayjs().subtract(1, 'hour').toISOString(),
-      timeline: [
-        { title: '提交申请', desc: 'AI 已完成资源核验并提交', time: dayjs().subtract(2, 'hour').toISOString() },
-        { title: 'AI 资源核验通过', desc: '容量、设备、时段均满足要求', time: dayjs().subtract(2, 'hour').add(2, 'minute').toISOString() },
-        { title: '管理员审核通过', desc: '请按时使用，使用后请关闭电源与门窗', time: dayjs().subtract(1, 'hour').toISOString() },
-      ],
+      timeline: [],
     },
     {
       id: 'ap_seed_002',
@@ -72,28 +68,45 @@ function seedApplications() {
       aiReason: '容量 55 人 ≥ 45 人，配备投影与空调，周五 10:00–12:00 空闲。',
       createdAt: dayjs().subtract(40, 'minute').toISOString(),
       reviewedAt: null,
-      timeline: [
-        { title: '提交申请', desc: 'AI 已完成资源核验并提交', time: dayjs().subtract(40, 'minute').toISOString() },
-        { title: 'AI 资源核验通过', desc: '容量、设备、时段均满足要求', time: dayjs().subtract(39, 'minute').toISOString() },
-        { title: '等待管理员审核', desc: '预计 2 小时内完成', time: null, pending: true },
-      ],
+      timeline: [],
     },
   ]
 }
 
+function dateOfBlock(block) {
+  const date = new Date(block.startsAt)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`
+}
+
+function timeOfBlock(block, edge) {
+  const date = new Date(edge === 'end' ? block.endsAt : block.startsAt)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function weekdayOfDate(value) {
+  const day = dayjs(value).day()
+  return day === 0 ? 7 : day
+}
+
 export const useClassroomStore = defineStore('classroom', () => {
-  const rooms = ref(classrooms)
+  const user = useUserStore()
+  const rooms = ref(classrooms.map((room) => ({ ...room, busy: [...(room.busy || [])] })))
   const storedApplications = loadState(V, seedApplications())
-  const applications = ref(
-    Array.isArray(storedApplications) && storedApplications.every((item) => classrooms.some((room) => room.id === item.roomId))
-      ? storedApplications
-      : seedApplications(),
-  )
+  const applications = ref(Array.isArray(storedApplications) ? storedApplications : [])
+  const roomBlocks = ref([])
+  const availabilityVersion = ref(0)
+  const availabilityReady = ref(false)
+  const syncing = ref(false)
+  const syncError = ref('')
+  const eventConnected = ref(false)
   const criteria = ref({
     campus: '',
     building: '',
     kind: '',
     day: 3,
+    date: nextDate(3).format('YYYY-MM-DD'),
     start: '15:00',
     end: '17:00',
     capacity: 30,
@@ -104,11 +117,17 @@ export const useClassroomStore = defineStore('classroom', () => {
   const recommendations = ref([])
   const loading = ref(false)
   let seq = 0
+  let eventSource = null
+  let refreshTimer = null
+  let activeHydrate = null
 
   const filters = computed(() => classroomFilters)
-
-  const pendingApplications = computed(() => applications.value.filter((a) => a.status === 'pending'))
-  const approvedApplications = computed(() => applications.value.filter((a) => a.status === 'approved'))
+  const pendingApplications = computed(() =>
+    applications.value.filter((item) => item.status === 'pending'),
+  )
+  const approvedApplications = computed(() =>
+    applications.value.filter((item) => item.status === 'approved'),
+  )
   const stats = computed(() => ({
     total: applications.value.length,
     pending: pendingApplications.value.length,
@@ -117,19 +136,162 @@ export const useClassroomStore = defineStore('classroom', () => {
   }))
 
   function getRoom(id) {
-    return rooms.value.find((r) => r.id === id) || null
+    return rooms.value.find((room) => room.id === id) || null
   }
 
   function getApplication(id) {
-    return applications.value.find((a) => a.id === id) || null
+    return applications.value.find((item) => item.id === id) || null
   }
 
-  function freeSlotsOf(room, day) {
-    return roomFreeSlots(room, day || 3)
+  function blocksForRoom(room, day, date = '') {
+    if (!room) return []
+    return roomBlocks.value.filter((block) => {
+      if (block.roomId !== room.id) return false
+      if (date) return dateOfBlock(block) === date
+      return weekdayOfDate(block.startsAt) === Number(day)
+    })
+  }
+
+  function roomWithBlocks(room, day, date = '') {
+    const dynamicBusy = blocksForRoom(room, day, date).map((block) => ({
+      day: weekdayOfDate(block.startsAt),
+      date: dateOfBlock(block),
+      start: timeOfBlock(block, 'start'),
+      end: timeOfBlock(block, 'end'),
+      label:
+        block.sourceType === 'application'
+          ? block.status === 'tentative'
+            ? '借用审核中'
+            : '借用已批准'
+          : block.sourceType === 'maintenance'
+            ? '维护占用'
+            : '课程安排',
+      sourceType: block.sourceType,
+      status: block.status,
+    }))
+    return {
+      ...room,
+      busy: [...(availabilityReady.value ? [] : room.busy || []), ...dynamicBusy],
+    }
+  }
+
+  function freeSlotsOf(room, day, date = '') {
+    return roomFreeSlots(roomWithBlocks(room, day || 3, date), day || 3)
+  }
+
+  function roomFreeAt(room, day, start, end, date = '') {
+    const target = roomWithBlocks(room, day, date)
+    return !(target.busy || []).some((busy) => {
+      if (date && busy.date && busy.date !== date) return false
+      return busy.start < end && busy.end > start
+    })
+  }
+
+  function blockAt(room, day, start, end, date = '') {
+    return blocksForRoom(room, day, date).find((block) => {
+      const blockStart = timeOfBlock(block, 'start')
+      const blockEnd = timeOfBlock(block, 'end')
+      return blockStart < end && blockEnd > start
+    }) || null
+  }
+
+  function replaceApplication(application) {
+    if (!application?.id) return
+    const index = applications.value.findIndex((item) => item.id === application.id)
+    if (index >= 0) applications.value.splice(index, 1, application)
+    else applications.value.unshift(application)
+  }
+
+  async function refreshAvailability({ quiet = false } = {}) {
+    if (!user.canAccess('classroom')) return
+    if (!quiet) syncing.value = true
+    try {
+      const from = dayjs().format('YYYY-MM-DD')
+      const to = dayjs().add(60, 'day').format('YYYY-MM-DD')
+      const data = await apiRequest(
+        `/classroom/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      )
+      roomBlocks.value = Array.isArray(data.blocks) ? data.blocks : []
+      availabilityVersion.value = Number(data.availabilityVersion) || 0
+      availabilityReady.value = true
+      syncError.value = ''
+    } catch (error) {
+      syncError.value = error?.message || '教室占用同步失败'
+      availabilityReady.value = false
+      if (!quiet) throw error
+    } finally {
+      if (!quiet) syncing.value = false
+    }
+  }
+
+  async function refreshApplications({ quiet = false } = {}) {
+    if (!user.canAccess('classroom')) return []
+    try {
+      const data = await apiRequest('/classroom/applications')
+      if (Array.isArray(data.applications)) applications.value = data.applications
+      return applications.value
+    } catch (error) {
+      syncError.value = error?.message || '教室申请同步失败'
+      if (!quiet) throw error
+      return applications.value
+    }
+  }
+
+  async function hydrate({ force = false } = {}) {
+    if (!user.isLoggedIn || !user.canAccess('classroom')) return
+    if (activeHydrate && !force) return activeHydrate
+    activeHydrate = Promise.all([
+      refreshAvailability(),
+      refreshApplications(),
+    ]).finally(() => {
+      activeHydrate = null
+    })
+    return activeHydrate
+  }
+
+  function scheduleRefresh() {
+    window.clearTimeout(refreshTimer)
+    refreshTimer = window.setTimeout(() => {
+      refreshAvailability({ quiet: true })
+      refreshApplications({ quiet: true }).then(() => {
+        if (lastCriteria.value) recommend(lastCriteria.value)
+      })
+    }, 120)
+  }
+
+  function stopEvents() {
+    if (eventSource) {
+      eventSource.close()
+      eventSource = null
+    }
+    eventConnected.value = false
+    window.clearTimeout(refreshTimer)
+  }
+
+  function connectEvents() {
+    if (eventSource || !user.isLoggedIn || !user.canAccess('classroom')) return
+    const token = getAuthToken()
+    if (!token || typeof EventSource === 'undefined') return
+    eventSource = new EventSource(
+      apiUrl(`/classroom/events?token=${encodeURIComponent(token)}`),
+    )
+    eventSource.addEventListener('ready', () => {
+      eventConnected.value = true
+      scheduleRefresh()
+    })
+    eventSource.addEventListener('occupancy', () => {
+      eventConnected.value = true
+      scheduleRefresh()
+    })
+    eventSource.onerror = () => {
+      eventConnected.value = false
+    }
   }
 
   function setCriteria(patch) {
-    criteria.value = { ...criteria.value, ...patch }
+    const next = { ...criteria.value, ...patch }
+    if ('day' in patch) next.date = nextDate(Number(patch.day) || 3).format('YYYY-MM-DD')
+    criteria.value = next
   }
 
   async function recommend(input) {
@@ -140,116 +302,114 @@ export const useClassroomStore = defineStore('classroom', () => {
     lastCriteria.value = JSON.parse(JSON.stringify(merged))
     loading.value = true
     const job = ++seq
-    await sleep(900)
+    await sleep(420)
+    await refreshAvailability({ quiet: true })
     if (job !== seq) return recommendations.value
-    recommendations.value = recommendClassrooms(rooms.value, merged)
+    const augmented = rooms.value.map((room) =>
+      roomWithBlocks(room, merged.day, merged.date),
+    )
+    recommendations.value = recommendClassrooms(augmented, merged)
     loading.value = false
     return recommendations.value
   }
 
-  function apply(payload) {
-    const room = getRoom(payload.roomId)
-    if (!room) return null
-    const user = useUserStore()
-    const notify = useNotifyStore()
-    const application = {
-      id: uid('ap'),
-      roomId: room.id,
-      roomCode: room.code,
-      building: room.building,
-      campus: room.campus,
-      date: payload.date,
-      day: Number(payload.day) || 3,
-      start: payload.start,
-      end: payload.end,
-      purpose: payload.purpose,
-      people: Number(payload.people) || 0,
-      applicant: user.user?.name || payload.applicant || '林小满',
-      applicantId: user.user?.id || '',
-      contact: payload.contact || '站内联系',
-      note: payload.note || '',
-      status: 'pending',
-      aiReason:
-        payload.aiReason ||
-        `容量 ${room.capacity} 人，配备${room.equipment.join('、')}，${payload.date} ${payload.start}–${payload.end} 空闲。`,
-      createdAt: new Date().toISOString(),
-      reviewedAt: null,
-      timeline: [
-        { title: '提交申请', desc: 'AI 已完成资源核验并提交', time: new Date().toISOString() },
-        {
-          title: 'AI 资源核验通过',
-          desc: `容量 ${room.capacity} 人 · ${room.equipment.join(' / ')} · 时段空闲`,
-          time: new Date().toISOString(),
-        },
-        { title: '等待管理员审核', desc: '预计 2 小时内完成', time: null, pending: true },
-      ],
-    }
-    applications.value.unshift(application)
-    notify.add({
+  async function apply(payload) {
+    if (!user.canAccess('classroom')) throw new Error('当前角色无权借用教室')
+    const data = await apiRequest('/classroom/applications', {
+      method: 'POST',
+      body: {
+        ...payload,
+        idempotencyKey:
+          payload.idempotencyKey || `classroom:${uid('submit')}`,
+      },
+      timeoutMs: 15_000,
+    })
+    replaceApplication(data.application)
+    availabilityVersion.value = Math.max(
+      availabilityVersion.value,
+      Number(data.availabilityVersion) || 0,
+    )
+    await refreshAvailability({ quiet: true })
+    useNotifyStore().add({
       type: 'status',
       title: '教室申请已提交',
-      content: `${room.building} ${room.code} · ${payload.date} ${payload.start}–${payload.end} 已提交审核，结果将在这里通知你。`,
-      link: `/classroom/status/${application.id}`,
+      content: `${data.application.building} ${data.application.roomCode} · ${data.application.date} ${data.application.start}–${data.application.end} 已建立临时占用。`,
+      link: `/classroom/status/${data.application.id}`,
       sourceType: 'classroom',
-      sourceId: application.id,
+      sourceId: data.application.id,
     })
-    return application
+    return data.application
   }
 
-  function approve(id) {
-    const app = getApplication(id)
-    if (!app || app.status !== 'pending') return
-    app.status = 'approved'
-    app.reviewedAt = new Date().toISOString()
-    app.timeline = app.timeline.filter((t) => !t.pending)
-    app.timeline.push({
-      title: '管理员审核通过',
-      desc: '请按时使用，使用后请关闭电源与门窗',
-      time: app.reviewedAt,
+  async function review(id, action, reason = '') {
+    const data = await apiRequest(`/classroom/applications/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: { action, reason },
     })
-    useNotifyStore().add({
-      type: 'status',
-      title: '教室申请已通过',
-      content: `${app.building} ${app.roomCode} · ${app.date} ${app.start}–${app.end} 已通过审核。`,
-      link: `/classroom/status/${app.id}`,
-      recipientUserId: app.applicantId || '',
-      recipientName: app.applicant,
-      sourceType: 'classroom',
-      sourceId: app.id,
-    })
+    replaceApplication(data.application)
+    availabilityVersion.value = Math.max(
+      availabilityVersion.value,
+      Number(data.availabilityVersion) || 0,
+    )
+    await refreshAvailability({ quiet: true })
+    return data.application
   }
 
-  function reject(id, reason = '该时段已被其他活动占用') {
-    const app = getApplication(id)
-    if (!app || app.status !== 'pending') return
-    app.status = 'rejected'
-    app.reviewedAt = new Date().toISOString()
-    app.timeline = app.timeline.filter((t) => !t.pending)
-    app.timeline.push({ title: '管理员驳回', desc: reason, time: app.reviewedAt })
-    useNotifyStore().add({
-      type: 'status',
-      title: '教室申请未通过',
-      content: `${app.building} ${app.roomCode} · ${app.date} ${app.start}–${app.end}：${reason}`,
-      link: `/classroom/status/${app.id}`,
-      recipientUserId: app.applicantId || '',
-      recipientName: app.applicant,
-      sourceType: 'classroom',
-      sourceId: app.id,
+  async function approve(id) {
+    return review(id, 'approve', '审核通过')
+  }
+
+  async function reject(id, reason = '该时段已被其他活动占用') {
+    return review(id, 'reject', reason)
+  }
+
+  async function cancel(id, reason = '申请人取消') {
+    const data = await apiRequest(`/classroom/applications/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      body: { reason },
     })
+    replaceApplication(data.application)
+    availabilityVersion.value = Math.max(
+      availabilityVersion.value,
+      Number(data.availabilityVersion) || 0,
+    )
+    await refreshAvailability({ quiet: true })
+    return data.application
   }
 
-  function cancel(id) {
-    const app = getApplication(id)
-    if (!app || app.status === 'cancelled') return
-    app.status = 'cancelled'
-    app.timeline.push({ title: '申请人取消', desc: '该申请已由申请人取消', time: new Date().toISOString() })
+  if (typeof window !== 'undefined') {
+    window.addEventListener('campus-smart-dispatch-platform:session-ready', () => {
+      hydrate({ force: true }).then(connectEvents).catch(() => {})
+    })
+    window.addEventListener('campus-smart-dispatch-platform:session-clear', () => {
+      stopEvents()
+      applications.value = []
+      roomBlocks.value = []
+      availabilityVersion.value = 0
+      availabilityReady.value = false
+    })
+    window.addEventListener('focus', () => {
+      if (user.isLoggedIn && user.canAccess('classroom')) {
+        refreshAvailability({ quiet: true })
+        refreshApplications({ quiet: true })
+      }
+    })
+    window.setTimeout(() => {
+      if (user.isLoggedIn && user.canAccess('classroom')) {
+        hydrate().then(connectEvents).catch(() => {})
+      }
+    }, 0)
   }
-
-  bindSharedState(V, applications, '教室申请', { permission: 'classroom.apply' })
 
   return {
     rooms,
     applications,
+    roomBlocks,
+    availabilityVersion,
+    availabilityReady,
+    syncing,
+    syncError,
+    eventConnected,
     criteria,
     lastCriteria,
     recommendations,
@@ -261,6 +421,13 @@ export const useClassroomStore = defineStore('classroom', () => {
     getRoom,
     getApplication,
     freeSlotsOf,
+    roomFreeAt,
+    blockAt,
+    refreshAvailability,
+    refreshApplications,
+    hydrate,
+    connectEvents,
+    stopEvents,
     setCriteria,
     recommend,
     apply,

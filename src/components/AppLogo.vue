@@ -10,26 +10,15 @@ defineProps({
 <template>
   <div class="logo" :class="{ 'logo--light': light }">
     <svg class="logo__mark" :width="size" :height="size" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="csdpLogoGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#6C63FF" />
-          <stop offset="0.55" stop-color="#8071FF" />
-          <stop offset="1" stop-color="#12B3A6" />
-        </linearGradient>
-      </defs>
-      <rect width="40" height="40" rx="12" fill="url(#csdpLogoGrad)" />
-      <circle cx="20" cy="12.2" r="2.5" fill="#fff" />
-      <path
-        d="M11.6 27.2v-1.1c0-4.3 3.7-7.8 8.4-7.8s8.4 3.5 8.4 7.8v1.1"
-        stroke="#fff"
-        stroke-width="2.3"
-        stroke-linecap="round"
-      />
-      <path d="M20 4.6v2M8.9 8.2l1.4 1.5M31.1 8.2l-1.4 1.5" stroke="#fff" stroke-width="1.7" stroke-linecap="round" opacity="0.85" />
+      <rect width="40" height="40" rx="4" fill="#33546b" />
+      <path d="M11 27V13" stroke="#fffdfa" stroke-width="1.6" stroke-linecap="square" opacity="0.55" />
+      <path d="M11 16.5h9.5M11 23.5h13" stroke="#fffdfa" stroke-width="1.6" stroke-linecap="square" />
+      <circle cx="26.5" cy="16.5" r="2.6" fill="#fffdfa" />
+      <circle cx="20.5" cy="23.5" r="2.6" fill="none" stroke="#fffdfa" stroke-width="1.6" />
     </svg>
     <div v-if="showText && !compact" class="logo__text">
       <div class="logo__name">校园智能调度平台</div>
-      <div class="logo__sub">AI 智能调度</div>
+      <div class="logo__sub">CAMPUS DISPATCH</div>
     </div>
   </div>
 </template>
@@ -38,14 +27,13 @@ defineProps({
 .logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .logo__mark {
   flex: none;
-  border-radius: 12px;
-  box-shadow: 0 10px 22px -12px rgba(108, 99, 255, 0.9);
+  border-radius: 4px;
 }
 
 .logo__text {
@@ -54,26 +42,27 @@ defineProps({
 }
 
 .logo__name {
-  font-size: 17px;
-  font-weight: 760;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-1);
+  white-space: nowrap;
 }
 
 .logo__sub {
-  margin-top: 3px;
-  font-size: 10px;
-  font-weight: 600;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0.14em;
-  color: var(--text-3);
-  text-transform: uppercase;
+  color: var(--text-4);
 }
 
 .logo--light .logo__name {
-  color: #fff;
+  color: var(--text-invert);
 }
 
 .logo--light .logo__sub {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 253, 250, 0.5);
 }
 </style>

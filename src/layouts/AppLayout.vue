@@ -51,6 +51,7 @@ const resolvingConflict = ref(false)
 
 const collapsed = computed(() => app.sidebarCollapsed)
 const pageSection = computed(() => route.meta.section || '校园智能调度平台')
+const pageTitle = computed(() => route.meta.title || '校园智能调度平台')
 const previews = computed(() => notify.items.slice(0, 4))
 const activeConflict = computed(() => cloudConflicts[0] || null)
 
@@ -162,7 +163,7 @@ onBeforeUnmount(() => {
             <el-icon :size="19"><Menu /></el-icon>
           </button>
           <div class="topbar__title">
-            <span class="topbar__section">{{ pageSection }}</span>
+            <span class="topbar__section" :title="pageSection">{{ pageTitle }}</span>
           </div>
         </div>
 
@@ -367,8 +368,8 @@ onBeforeUnmount(() => {
   top: 10px;
   left: 12px;
   z-index: 999;
-  padding: 9px 16px;
-  border-radius: 10px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
   background: var(--brand-600);
   color: #fff;
   font-size: 13px;
@@ -411,11 +412,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   height: var(--topbar-h);
-  padding: 0 26px;
-  background: rgba(250, 251, 255, 0.82);
-  backdrop-filter: blur(16px) saturate(1.5);
+  padding: 0 32px;
+  background: rgba(246, 244, 239, 0.92);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
 
@@ -433,51 +434,54 @@ onBeforeUnmount(() => {
 
 .topbar__section {
   display: block;
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  color: var(--text-2);
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .topbar__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex: none;
 }
 
 .demo-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 11px;
-  border: 1px solid var(--brand-100);
-  border-radius: 10px;
-  color: var(--brand-700);
-  background: var(--brand-50);
-  font-size: 10.5px;
-  font-weight: 650;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  background: var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 600;
   cursor: pointer;
 }
 
 .demo-trigger:hover {
   border-color: var(--brand-300);
-  background: var(--surface);
+  color: var(--brand-700);
 }
 
 .cloud-state {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--teal-100);
-  border-radius: var(--radius-pill);
-  background: var(--teal-50);
-  color: var(--teal-600);
-  font-size: 10.5px;
-  font-weight: 650;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -486,7 +490,6 @@ onBeforeUnmount(() => {
   height: 6px;
   border-radius: 50%;
   background: var(--teal-500);
-  box-shadow: 0 0 0 3px rgba(18, 179, 166, 0.12);
 }
 
 .cloud-state.is-error {
@@ -504,9 +507,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text-2);
@@ -523,72 +526,75 @@ onBeforeUnmount(() => {
 
 .icon-btn__badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 17px;
-  height: 17px;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
   border-radius: var(--radius-pill);
   background: var(--coral-500);
-  border: 2px solid #fafbff;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 13px;
+  border: 2px solid var(--bg);
+  color: var(--text-invert);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 14px;
   text-align: center;
 }
 
 .ai-trigger {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 8px 0 6px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--brand-100);
-  background: linear-gradient(120deg, #fff, #f5f3ff);
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
   color: var(--brand-700);
   font-family: inherit;
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
-  transition: all var(--dur) var(--ease-out);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .ai-trigger:hover {
   border-color: var(--brand-300);
-  box-shadow: 0 8px 20px -12px rgba(108, 99, 255, 0.8);
-  transform: translateY(-1px);
+  background: var(--brand-50);
+  transform: none;
 }
 
 .ai-trigger__orb {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-600);
   color: #fff;
 }
 
 .ai-trigger__kbd {
-  padding: 2px 5px;
-  border-radius: 5px;
-  background: rgba(108, 99, 255, 0.08);
-  border: 1px solid rgba(108, 99, 255, 0.12);
+  padding: 0px 4px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
   font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--brand-600);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
 }
 
 .user-chip {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 10px 0 5px;
-  border-radius: var(--radius-pill);
+  height: 36px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   cursor: pointer;
@@ -598,7 +604,7 @@ onBeforeUnmount(() => {
 
 .user-chip:hover {
   border-color: var(--line-strong);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface-2);
 }
 
 .user-chip__avatar {
@@ -629,71 +635,71 @@ onBeforeUnmount(() => {
 }
 
 .user-chip__name {
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .user-chip__role {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: 0px;
+  font-size: var(--fs-xs);
   color: var(--text-3);
 }
 
 .backend-offline {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px var(--space-page, 24px) 0;
-  padding: 10px 14px;
-  border: 1px solid rgba(245, 166, 35, 0.28);
-  border-radius: 12px;
-  color: var(--amber-700);
+  gap: 12px;
+  margin: 12px var(--space-page, 24px) 0;
+  padding: 12px 16px;
+  border: 1px solid var(--amber-100);
+  border-radius: var(--radius);
+  color: var(--amber-600);
   background: var(--amber-50);
 }
 
 .backend-offline > .el-icon {
   flex: none;
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .backend-offline > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
 
 .backend-offline strong {
-  font-size: 11.5px;
+  font-size: var(--fs-sm);
 }
 
 .backend-offline span {
-  font-size: 10.5px;
+  font-size: var(--fs-sm);
   color: var(--text-3);
 }
 
 .conflict-dialog {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 12px;
 }
 
 .conflict-dialog__head {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 12px;
 }
 
 .conflict-dialog__head > span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   flex: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   color: var(--amber-600);
   background: var(--amber-50);
   font-size: 18px;
@@ -706,25 +712,25 @@ onBeforeUnmount(() => {
 }
 
 .conflict-dialog__head strong {
-  font-size: 13px;
+  font-size: var(--fs-base);
   color: var(--text-1);
 }
 
 .conflict-dialog__head p {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text-3);
 }
 
 .conflict-dialog__meta {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
-  border-radius: 10px;
+  gap: 16px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-3);
 }
 
@@ -740,7 +746,7 @@ onBeforeUnmount(() => {
 
 .content {
   flex: 1;
-  padding: 26px 28px 40px;
+  padding: 32px 32px 48px;
   width: 100%;
 }
 
@@ -750,19 +756,19 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 
 .np__title {
   font-size: var(--fs-base);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .np__sub {
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
   color: var(--text-3);
 }
 
@@ -776,11 +782,11 @@ onBeforeUnmount(() => {
 .np__item {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 4px;
+  padding: 12px 4px;
   border: none;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   font-family: inherit;
@@ -795,7 +801,7 @@ onBeforeUnmount(() => {
 .np__dot {
   width: 6px;
   height: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
   border-radius: 50%;
   background: var(--line-strong);
   flex: none;
@@ -803,19 +809,18 @@ onBeforeUnmount(() => {
 
 .np__dot.is-important {
   background: var(--coral-500);
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.16);
 }
 
 .np__body {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .np__item-title {
-  font-size: 12px;
-  font-weight: 550;
+  font-size: var(--fs-sm);
+  font-weight: 500;
   line-height: 1.5;
   color: var(--text-2);
   display: -webkit-box;
@@ -826,17 +831,17 @@ onBeforeUnmount(() => {
 }
 
 .np__item.is-unread .np__item-title {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .np__item-time {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   color: var(--text-4);
 }
 
 .np__empty {
-  padding: 22px 0;
+  padding: 24px 0;
   text-align: center;
   font-size: var(--fs-xs);
   color: var(--text-3);
@@ -845,7 +850,7 @@ onBeforeUnmount(() => {
 .np__foot {
   display: flex;
   justify-content: flex-end;
-  padding-top: 8px;
+  padding-top: 12px;
 }
 
 /* 移动端底部导航 */
@@ -860,8 +865,7 @@ onBeforeUnmount(() => {
   justify-content: space-around;
   height: calc(var(--mobile-tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
+  background: var(--bg);
   border-top: 1px solid var(--line);
 }
 
@@ -870,13 +874,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   flex: 1;
   border: none;
   background: none;
   color: var(--text-3);
   font-family: inherit;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   cursor: pointer;
   transition: color var(--dur);
 }
@@ -909,14 +913,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  margin-top: -14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
-  color: #fff;
-  box-shadow: 0 10px 20px -8px rgba(108, 99, 255, 0.9);
-  border: 3px solid #fff;
+  width: 36px;
+  height: 36px;
+  margin-top: -12px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-600);
+  color: var(--text-invert);
+  border: 2px solid var(--bg);
 }
 
 .tabbar__ai .tabbar__label {
@@ -944,11 +947,11 @@ onBeforeUnmount(() => {
   }
 
   .topbar {
-    padding: 0 14px;
+    padding: 0 16px;
   }
 
   .content {
-    padding: 16px 14px calc(var(--mobile-tabbar-h) + 28px);
+    padding: 16px 16px calc(var(--mobile-tabbar-h) + 24px);
   }
 
   .ai-trigger__text,
@@ -963,7 +966,7 @@ onBeforeUnmount(() => {
   }
 
   .user-chip {
-    padding: 0 5px;
+    padding: 0 4px;
     border: none;
     background: transparent;
   }
@@ -972,8 +975,8 @@ onBeforeUnmount(() => {
 
 <style>
 .notice-pop.el-popover {
-  padding: 12px 14px;
+  padding: 12px 12px;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-overlay);
 }
 </style>

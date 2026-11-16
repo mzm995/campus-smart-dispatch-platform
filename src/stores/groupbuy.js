@@ -1,33 +1,64 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { groupBuys } from '@/mock/seed'
-import { sleep } from '@/utils/aiEngine'
+import { apiRequest } from '@/utils/api'
 import { countdown, uid } from '@/utils/format'
-import { loadState } from '@/utils/storage'
-import { bindSharedState } from '@/utils/cloudSync'
+import { loadState, saveState } from '@/utils/storage'
 import { useNotifyStore } from './notify'
 import { useUserStore } from './user'
 
 const V = 'v3:groupBuys'
+const COMMERCE_STATUS_TEXT = {
+  recruiting: '招募中',
+  formed: '已成团',
+  funded: '资金已托管',
+  purchasing: '采购中',
+  shipping: '配送中',
+  ready: '到货待领取',
+  completed: '已完成',
+  expired: '已结束',
+  cancelled: '已取消',
+  disputed: '争议处理中',
+  refunding: '退款中',
+}
 
 export const useGroupBuyStore = defineStore('groupbuy', () => {
-  const items = ref(loadState(V, groupBuys))
+  const cached = loadState(V, groupBuys)
+  const items = ref(Array.isArray(cached) ? cached : groupBuys)
   const creating = ref(false)
+  const loading = ref(false)
+  const syncing = ref(false)
+  const syncError = ref('')
   const keyword = ref('')
   const category = ref('全部')
+  let pollTimer = null
+  let hydrating = null
 
   function joinedCountOf(item) {
-    return (item.participants || []).reduce((sum, p) => sum + (Number(p.count) || 1), 0)
+    return (item.participants || []).reduce(
+      (sum, participant) => sum + (Number(participant.count) || 1),
+      0,
+    )
+  }
+
+  function commerceStatusOf(item) {
+    return item?.commerce?.status || (joinedCountOf(item) >= item?.targetCount ? 'formed' : 'recruiting')
   }
 
   function statusOf(item) {
-    if (joinedCountOf(item) >= item.targetCount) return 'success'
-    if (item.deadline && new Date(item.deadline).getTime() < Date.now()) return 'expired'
-    return 'ongoing'
+    const status = commerceStatusOf(item)
+    if (status === 'recruiting') return 'ongoing'
+    if (['completed', 'cancelled'].includes(status)) return 'expired'
+    if (status === 'expired') return 'expired'
+    return 'success'
+  }
+
+  function commerceTextOf(item) {
+    return COMMERCE_STATUS_TEXT[commerceStatusOf(item)] || '进行中'
   }
 
   function progressOf(item) {
-    return Math.min(100, Math.round((joinedCountOf(item) / item.targetCount) * 100))
+    return Math.min(100, Math.round((joinedCountOf(item) / Math.max(1, item.targetCount)) * 100))
   }
 
   function remainingOf(item) {
@@ -40,7 +71,10 @@ export const useGroupBuyStore = defineStore('groupbuy', () => {
 
   function isJoined(item) {
     const user = useUserStore()
-    return (item.participants || []).some((p) => p.name === user.user?.name)
+    return (item.participants || []).some(
+      (participant) =>
+        participant.userId === user.user?.id || participant.name === user.user?.name,
+    )
   }
 
   function isOwner(item) {
@@ -74,23 +108,48 @@ export const useGroupBuyStore = defineStore('groupbuy', () => {
   }
 
   function getById(id) {
-    return items.value.find((i) => i.id === id) || null
+    return items.value.find((item) => item.id === id) || null
+  }
+
+  function updateItem(item) {
+    if (!item?.id) return
+    const index = items.value.findIndex((entry) => entry.id === item.id)
+    if (index >= 0) items.value.splice(index, 1, item)
+    else items.value.unshift(item)
+    saveState(V, items.value)
   }
 
   const ongoing = computed(() =>
-    items.value.filter((i) => statusOf(i) === 'ongoing').sort((a, b) => new Date(a.deadline) - new Date(b.deadline)),
+    items.value
+      .filter((item) => commerceStatusOf(item) === 'recruiting')
+      .sort((a, b) => new Date(a.deadline) - new Date(b.deadline)),
   )
-  const finished = computed(() => items.value.filter((i) => statusOf(i) !== 'ongoing'))
+  const finished = computed(() =>
+    items.value.filter((item) => commerceStatusOf(item) !== 'recruiting'),
+  )
   const mine = computed(() => {
     const user = useUserStore()
-    return items.value.filter((i) => i.owner === user.user?.name || (i.participants || []).some((p) => p.name === user.user?.name))
+    return items.value.filter(
+      (item) =>
+        item.ownerId === user.user?.id ||
+        item.owner === user.user?.name ||
+        (item.participants || []).some(
+          (participant) =>
+            participant.userId === user.user?.id || participant.name === user.user?.name,
+        ),
+    )
   })
 
   const filtered = computed(() => {
-    const kw = keyword.value.trim()
-    return items.value.filter((i) => {
-      if (category.value !== '全部' && i.category !== category.value) return false
-      if (kw && !`${i.title}${i.product}${i.pickup}`.includes(kw)) return false
+    const kw = keyword.value.trim().toLowerCase()
+    return items.value.filter((item) => {
+      if (category.value !== '全部' && item.category !== category.value) return false
+      if (
+        kw &&
+        !`${item.title}${item.product}${item.pickup}${item.owner}`.toLowerCase().includes(kw)
+      ) {
+        return false
+      }
       return true
     })
   })
@@ -99,263 +158,191 @@ export const useGroupBuyStore = defineStore('groupbuy', () => {
     ongoing: ongoing.value.length,
     total: items.value.length,
     joined: mine.value.length,
-    saved: mine.value.reduce((sum, i) => sum + (i.unitPrice || 0) * 0.3, 0).toFixed(1),
+    saved: mine.value.reduce((sum, item) => sum + (item.unitPrice || 0) * 0.3, 0).toFixed(1),
     errands: items.value.filter((item) => errandOf(item)?.status === 'open').length,
   }))
 
+  async function hydrate({ quiet = false } = {}) {
+    if (!useUserStore().isLoggedIn) return items.value
+    if (hydrating) return hydrating
+    if (!quiet) loading.value = true
+    hydrating = apiRequest('/groupbuy/orders')
+      .then((data) => {
+        if (Array.isArray(data.items)) items.value = data.items
+        saveState(V, items.value)
+        syncError.value = ''
+        return items.value
+      })
+      .catch((error) => {
+        syncError.value = error?.message || '拼单同步失败'
+        if (!quiet) throw error
+        return items.value
+      })
+      .finally(() => {
+        loading.value = false
+        hydrating = null
+      })
+    return hydrating
+  }
+
   async function create(form) {
     creating.value = true
-    await sleep(650)
-    const user = useUserStore()
-    const notify = useNotifyStore()
-    const item = {
-      id: uid('gb'),
-      title: form.title,
-      product: form.product,
-      category: form.category || '其他',
-      unitPrice: Number(form.unitPrice) || 0,
-      targetCount: Number(form.targetCount) || 2,
-      participants: [{
-        name: user.user?.name || '林小满',
-        userId: user.user?.id || '',
-        count: Number(form.myCount) || 1,
-      }],
-      deadline: form.deadline,
-      pickup: form.pickup,
-      owner: user.user?.name || '林小满',
-      ownerId: user.user?.id || '',
-      note: form.note || '',
-      tone: form.tone || 'brand',
-      createdAt: new Date().toISOString(),
-      notice: form.notice || '',
-      errand: form.errandEnabled
-        ? {
-            enabled: true,
-            tip: Math.max(0.01, Number(form.errandTip) || 0),
-            description: String(form.errandDescription || '').trim(),
-            status: 'open',
-            runnerId: '',
-            runnerName: '',
-            acceptedAt: null,
-            completedAt: null,
-            confirmedAt: null,
-            cancelledAt: null,
-            cancelReason: '',
-          }
-        : {
-            enabled: false,
-            tip: 0,
-            description: '',
-            status: 'none',
-          },
-    }
-    items.value.unshift(item)
-    creating.value = false
-    notify.add({
-      type: 'deadline',
-      title: '拼单已发布',
-      content: `「${item.title}」已发布，目标 ${item.targetCount} 份，截止 ${countdown(item.deadline).label}。`,
-      link: `/groupbuy/${item.id}`,
-      sourceType: 'groupbuy',
-      sourceId: item.id,
-    })
-    return item
-  }
-
-  function acceptErrand(id) {
-    const item = getById(id)
-    const user = useUserStore()
-    const errand = errandOf(item)
-    if (!item || !errand) return { ok: false, message: '该拼单没有跑腿任务' }
-    if (isOwner(item)) return { ok: false, message: '发起人不能接取自己的跑腿任务' }
-    if (new Date(item.deadline).getTime() <= Date.now()) {
-      return { ok: false, message: '拼单已截止，无法接取跑腿' }
-    }
-    if (errand.status !== 'open') {
-      return {
-        ok: false,
-        message: errand.status === 'accepted' ? '该跑腿已被其他同学接取' : '该跑腿当前不可接取',
-      }
-    }
-    errand.status = 'accepted'
-    errand.runnerId = user.user?.id || ''
-    errand.runnerName = user.user?.name || '匿名同学'
-    errand.runnerContact = '站内联系'
-    errand.acceptedAt = new Date().toISOString()
-    useNotifyStore().add({
-      type: 'status',
-      title: '跑腿任务已被接取',
-      content: `${errand.runnerName} 接取了「${item.title}」的跑腿任务，小费 ¥${Number(errand.tip).toFixed(2)}。`,
-      link: `/groupbuy/${item.id}`,
-      important: true,
-      recipientUserId: item.ownerId || '',
-      recipientName: item.owner,
-      sourceType: 'groupbuy',
-      sourceId: item.id,
-    })
-    return { ok: true, message: '接单成功，请在完成后标记送达', errand }
-  }
-
-  function completeErrand(id) {
-    const item = getById(id)
-    const errand = errandOf(item)
-    if (!item || !errand) return { ok: false, message: '该拼单没有跑腿任务' }
-    if (!isErrandRunner(item)) return { ok: false, message: '只有当前接单人可以标记完成' }
-    if (errand.status !== 'accepted') {
-      return { ok: false, message: '跑腿任务当前不在配送中' }
-    }
-    errand.status = 'delivered'
-    errand.completedAt = new Date().toISOString()
-    useNotifyStore().add({
-      type: 'status',
-      title: '跑腿任务等待确认',
-      content: `${errand.runnerName} 已完成「${item.title}」的跑腿任务，请确认后结算小费。`,
-      link: `/groupbuy/${item.id}`,
-      important: true,
-      recipientUserId: item.ownerId || '',
-      recipientName: item.owner,
-      sourceType: 'groupbuy',
-      sourceId: item.id,
-    })
-    return { ok: true, message: '已标记送达，等待发起人确认', errand }
-  }
-
-  function confirmErrand(id) {
-    const item = getById(id)
-    const errand = errandOf(item)
-    if (!item || !errand) return { ok: false, message: '该拼单没有跑腿任务' }
-    if (!isOwner(item)) return { ok: false, message: '只有发起人可以确认完成并结算' }
-    if (errand.status !== 'delivered') {
-      return { ok: false, message: '跑腿者尚未标记送达' }
-    }
-    errand.status = 'settled'
-    errand.confirmedAt = new Date().toISOString()
-    errand.settledAmount = Number(errand.tip) || 0
-    useNotifyStore().add({
-      type: 'status',
-      title: '跑腿小费已结算',
-      content: `发起人已确认「${item.title}」完成，小费 ¥${errand.settledAmount.toFixed(2)} 已结算。`,
-      link: `/groupbuy/${item.id}`,
-      recipientUserId: errand.runnerId || '',
-      recipientName: errand.runnerName,
-      sourceType: 'groupbuy',
-      sourceId: item.id,
-    })
-    return { ok: true, message: `任务完成，小费 ¥${errand.settledAmount.toFixed(2)} 已结算`, errand }
-  }
-
-  function cancelErrandByOwner(id, reason = '发起人取消跑腿任务') {
-    const item = getById(id)
-    const errand = errandOf(item)
-    if (!item || !errand) return { ok: false, message: '该拼单没有跑腿任务' }
-    if (!isOwner(item)) return { ok: false, message: '只有发起人可以取消跑腿任务' }
-    if (!['open', 'accepted'].includes(errand.status)) {
-      return { ok: false, message: '当前状态不能取消跑腿任务' }
-    }
-    const runner = errand.runnerName
-    errand.status = 'cancelled'
-    errand.cancelledAt = new Date().toISOString()
-    errand.cancelReason = String(reason || '').trim()
-    if (runner) {
+    try {
+      const data = await apiRequest('/groupbuy/orders', {
+        method: 'POST',
+        body: {
+          ...form,
+          idempotencyKey: `group-create:${uid('request')}`,
+        },
+        timeoutMs: 15_000,
+      })
+      updateItem(data.item)
       useNotifyStore().add({
-        type: 'status',
-        title: '跑腿任务已取消',
-        content: `「${item.title}」的跑腿任务已取消：${errand.cancelReason || '发起人取消'}。`,
-        link: `/groupbuy/${item.id}`,
-        recipientUserId: errand.runnerId || '',
-        recipientName: runner,
+        type: 'deadline',
+        title: '拼单已发布',
+        content: `「${data.item.title}」已发布，目标 ${data.item.targetCount} 份，截止 ${countdown(data.item.deadline).label}。`,
+        link: `/groupbuy/${data.item.id}`,
         sourceType: 'groupbuy',
-        sourceId: item.id,
+        sourceId: data.item.id,
       })
+      return data.item
+    } finally {
+      creating.value = false
     }
-    return { ok: true, message: '跑腿任务已取消', errand }
   }
 
-  function withdrawErrand(id, reason = '接单人暂时无法继续') {
-    const item = getById(id)
-    const errand = errandOf(item)
-    if (!item || !errand) return { ok: false, message: '该拼单没有跑腿任务' }
-    if (!isErrandRunner(item)) return { ok: false, message: '只有当前接单人可以退出任务' }
-    if (errand.status !== 'accepted') {
-      return { ok: false, message: '任务已送达，不能直接退出' }
+  async function action(itemOrId, actionName, payload = {}) {
+    const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.id
+    if (!id) throw new Error('拼单不存在')
+    syncing.value = true
+    try {
+      const data = await apiRequest(`/groupbuy/${encodeURIComponent(id)}/actions`, {
+        method: 'POST',
+        body: {
+          action: actionName,
+          ...payload,
+          idempotencyKey: `group:${actionName}:${uid('request')}`,
+        },
+        timeoutMs: 15_000,
+      })
+      if (data.removed) {
+        items.value = items.value.filter((item) => item.id !== id)
+        saveState(V, items.value)
+      } else {
+        updateItem(data.item)
+      }
+      syncError.value = ''
+      return data
+    } catch (error) {
+      syncError.value = error?.message || '拼单操作失败'
+      throw error
+    } finally {
+      syncing.value = false
     }
-    const runnerName = errand.runnerName
-    errand.status = 'open'
-    errand.runnerId = ''
-    errand.runnerName = ''
-    errand.runnerContact = ''
-    errand.acceptedAt = null
-    errand.cancelReason = String(reason || '').trim()
-    useNotifyStore().add({
-      type: 'status',
-      title: '跑腿者已退出任务',
-      content: `${runnerName} 已退出「${item.title}」的跑腿任务，${errand.cancelReason || '任务重新开放接取'}。`,
-      link: `/groupbuy/${item.id}`,
-      important: true,
-      recipientUserId: item.ownerId || '',
-      recipientName: item.owner,
-      sourceType: 'groupbuy',
-      sourceId: item.id,
+  }
+
+  async function join(id, count = 1) {
+    return action(id, 'join', { quantity: count })
+  }
+
+  async function leave(id, quantity) {
+    return action(id, 'leave', { quantity })
+  }
+
+  async function purchase(id, receipt = '') {
+    return action(id, 'purchase', { receipt })
+  }
+
+  async function ship(id) {
+    return action(id, 'ship')
+  }
+
+  async function markReady(id, proof = '') {
+    return action(id, 'ready', { proof })
+  }
+
+  async function redeemPickup(id, userId, code) {
+    return action(id, 'redeem', { userId, code })
+  }
+
+  async function confirmReceived(id, code) {
+    return action(id, 'confirm_received', { code })
+  }
+
+  async function openDispute(id, reason) {
+    return action(id, 'dispute', { reason })
+  }
+
+  async function resolveDispute(id, accepted, resolution) {
+    return action(id, 'resolve_dispute', { accepted, resolution })
+  }
+
+  async function cancelOrder(id, reason = '发起人取消拼单') {
+    return action(id, 'cancel', { reason })
+  }
+
+  async function remove(id) {
+    return action(id, 'remove')
+  }
+
+  async function acceptErrand(id) {
+    return action(id, 'accept_errand')
+  }
+
+  async function completeErrand(id) {
+    return action(id, 'complete_errand')
+  }
+
+  async function confirmErrand(id) {
+    return action(id, 'confirm_errand')
+  }
+
+  async function cancelErrandByOwner(id, reason = '发起人取消跑腿任务') {
+    return action(id, 'cancel_errand', { reason })
+  }
+
+  async function withdrawErrand(id, reason = '接单人暂时无法继续') {
+    return action(id, 'withdraw_errand', { reason })
+  }
+
+  function stopPolling() {
+    if (pollTimer) window.clearInterval(pollTimer)
+    pollTimer = null
+  }
+
+  function startPolling() {
+    stopPolling()
+    if (!useUserStore().isLoggedIn) return
+    pollTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') hydrate({ quiet: true })
+    }, 8000)
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('campus-smart-dispatch-platform:session-ready', () => {
+      hydrate().catch(() => {})
+      startPolling()
     })
-    return { ok: true, message: '已退出跑腿，任务重新开放', errand }
+    window.addEventListener('campus-smart-dispatch-platform:session-clear', () => {
+      stopPolling()
+      items.value = []
+      saveState(V, [])
+    })
+    window.addEventListener('focus', () => hydrate({ quiet: true }))
+    window.setTimeout(() => {
+      if (useUserStore().isLoggedIn) {
+        hydrate().catch(() => {})
+        startPolling()
+      }
+    }, 0)
   }
-
-  function join(id, count = 1) {
-    const item = getById(id)
-    if (!item) return { ok: false, message: '拼单不存在' }
-    if (statusOf(item) !== 'ongoing') return { ok: false, message: '该拼单已结束' }
-    const user = useUserStore()
-    const notify = useNotifyStore()
-    const name = user.user?.name || '林小满'
-    const exists = item.participants.find((p) => p.name === name)
-    if (exists) {
-      exists.count += count
-    } else {
-      item.participants.push({
-        name,
-        userId: user.user?.id || '',
-        count,
-        at: new Date().toISOString(),
-      })
-    }
-    if (joinedCountOf(item) >= item.targetCount) {
-      notify.add({
-        type: 'match',
-        title: '拼单成团啦',
-        content: `「${item.title}」已满 ${item.targetCount} 份，等待发起人统一采购，记得按时取货。`,
-        link: `/groupbuy/${item.id}`,
-        recipientUserId: item.ownerId || '',
-        recipientName: item.owner,
-        sourceType: 'groupbuy',
-        sourceId: item.id,
-      })
-    }
-    return { ok: true, message: '接龙成功' }
-  }
-
-  function leave(id) {
-    const item = getById(id)
-    if (!item) return
-    const user = useUserStore()
-    const name = user.user?.name || '林小满'
-    const exists = item.participants.find((p) => p.name === name)
-    if (!exists) return
-    exists.count -= 1
-    if (exists.count <= 0) item.participants = item.participants.filter((p) => p.name !== name)
-  }
-
-  function remove(id) {
-    const item = getById(id)
-    if (!item || (!isOwner(item) && !useUserStore().isAdmin)) return false
-    items.value = items.value.filter((i) => i.id !== id)
-    return true
-  }
-
-  bindSharedState(V, items, '拼单集市')
 
   return {
     items,
     creating,
+    loading,
+    syncing,
+    syncError,
     keyword,
     category,
     ongoing,
@@ -364,6 +351,8 @@ export const useGroupBuyStore = defineStore('groupbuy', () => {
     filtered,
     stats,
     joinedCountOf,
+    commerceStatusOf,
+    commerceTextOf,
     statusOf,
     progressOf,
     remainingOf,
@@ -375,14 +364,23 @@ export const useGroupBuyStore = defineStore('groupbuy', () => {
     isErrandRunner,
     canAcceptErrand,
     getById,
+    hydrate,
     create,
+    join,
+    leave,
+    purchase,
+    ship,
+    markReady,
+    redeemPickup,
+    confirmReceived,
+    openDispute,
+    resolveDispute,
+    cancelOrder,
+    remove,
     acceptErrand,
     completeErrand,
     confirmErrand,
     cancelErrandByOwner,
     withdrawErrand,
-    join,
-    leave,
-    remove,
   }
 })

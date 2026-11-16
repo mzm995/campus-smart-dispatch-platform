@@ -84,21 +84,20 @@ export function initialOf(name) {
   return String(name).trim().slice(0, 1)
 }
 
-/** 根据字符串生成稳定的头像渐变 */
+/** 根据字符串生成稳定的头像底色（纯色，避免渐变头像的模板感）
+ *  只用钢蓝与鼠尾草两族、靠明度区分用户；每个色值对白字的对比度均 ≥ 4.5:1 */
 export function avatarGradient(seed = '') {
   const palettes = [
-    ['#6c63ff', '#a99bff'],
-    ['#12b3a6', '#5be0d2'],
-    ['#f5a623', '#ffcf70'],
-    ['#ff6b6b', '#ffa3a3'],
-    ['#3b82f6', '#7fb3ff'],
-    ['#8b5cf6', '#c4a7ff'],
-    ['#0ea5e9', '#6dd3ff'],
+    '#223a49',
+    '#364c3d',
+    '#33546b',
+    '#45604d',
+    '#476a83',
+    '#5b7a63',
   ]
   let hash = 0
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) % 997
-  const [a, b] = palettes[hash % palettes.length]
-  return `linear-gradient(135deg, ${a}, ${b})`
+  return palettes[hash % palettes.length]
 }
 
 /** 生成某天之后的日期 */

@@ -16,8 +16,8 @@ defineProps({
 
 <style scoped>
 .ai-badge--sm {
-  height: 19px;
-  padding: 0 7px;
-  font-size: 10px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: var(--fs-xs);
 }
 </style>

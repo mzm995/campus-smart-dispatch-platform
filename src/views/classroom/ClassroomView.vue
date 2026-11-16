@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   ArrowRight,
-  CircleCheck,
   Close,
   MagicStick,
   Refresh,
@@ -66,23 +65,21 @@ const criteriaDirty = computed(() => {
   return normalizeCriteria(classroom.lastCriteria) !== normalizeCriteria(classroom.criteria)
 })
 
-/* ---------- AI 需求条 ---------- */
 function submitAi() {
-  const value = aiText.value.trim()
-  if (!value) {
+  const text = aiText.value.trim()
+  if (!text) {
     ElMessage.warning('先用一句话描述需求，例如「周三下午借一间 30 人、带投影的教室」')
     return
   }
-  app.openAiDialog(value)
+  app.openAiDialog(text)
   aiText.value = ''
 }
 
-function useExample(text) {
-  aiText.value = text
+function useExample(item) {
+  aiText.value = item
   submitAi()
 }
 
-/* ---------- 筛选 ---------- */
 function setCampus(value) {
   classroom.setCriteria({ campus: value })
 }
@@ -95,11 +92,11 @@ function setKind(value) {
   classroom.setCriteria({ kind: value })
 }
 
-function setDay(day) {
-  classroom.setCriteria({ day })
+function setDay(value) {
+  classroom.setCriteria({ day: value })
 }
 
-function selectSlot(slot) {
+function setSlot(slot) {
   classroom.setCriteria({ start: slot.start, end: slot.end })
 }
 
@@ -107,35 +104,17 @@ function setCapacity(value) {
   classroom.setCriteria({ capacity: value })
 }
 
-function togglePurpose(purpose) {
-  classroom.setCriteria({
-    purpose: classroom.criteria.purpose === purpose ? '' : purpose,
-  })
+function setPurpose(value) {
+  classroom.setCriteria({ purpose: classroom.criteria.purpose === value ? '' : value })
 }
 
-function toggleEquipment(item) {
-  const list = classroom.criteria.equipment || []
+function toggleEquipment(value) {
+  const current = classroom.criteria.equipment || []
   classroom.setCriteria({
-    equipment: list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item],
+    equipment: current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value],
   })
-}
-
-function resetFilters() {
-  classroom.setCriteria({
-    campus: '',
-    building: '',
-    kind: '',
-    day: 3,
-    start: '15:00',
-    end: '17:00',
-    capacity: 30,
-    equipment: [],
-    purpose: '',
-  })
-  classroom.recommendations = []
-  classroom.lastCriteria = null
-  aiPrefill.value = false
-  ElMessage.success('筛选条件已重置')
 }
 
 function criteriaText(criteria) {
@@ -167,21 +146,38 @@ function normalizeCriteria(criteria) {
   })
 }
 
-function relaxEquipment() {
+function resetCriteria() {
+  classroom.setCriteria({
+    campus: '',
+    building: '',
+    kind: '',
+    day: 3,
+    start: '15:00',
+    end: '17:00',
+    capacity: 30,
+    equipment: [],
+    purpose: '',
+  })
+  classroom.recommendations = []
+  classroom.lastCriteria = null
+  aiPrefill.value = false
+  ElMessage.success('筛选条件已重置')
+}
+
+function clearEquipmentAndRecommend() {
   classroom.setCriteria({ equipment: [] })
   classroom.recommend()
 }
 
-async function recommendNow() {
+async function recommend() {
   await classroom.recommend()
 }
 
-/* ---------- 教室资源本地筛选 ---------- */
+/* ---------- 全部场所筛选 ---------- */
 const roomSearch = ref('')
 const roomCapacity = ref(0)
-const roomFeatures = ref([])
+const roomEquipment = ref([])
 const roomSort = ref('rating')
-
 const sortOptions = [
   { label: '评分优先', value: 'rating' },
   { label: '容量从大到小', value: 'capacity' },
@@ -201,31 +197,41 @@ const filteredRooms = computed(() => {
       return false
     }
     if (roomCapacity.value && room.capacity < roomCapacity.value) return false
-    if (roomFeatures.value.length && !roomFeatures.value.every((item) => room.equipment.includes(item))) {
+    if (
+      roomEquipment.value.length &&
+      !roomEquipment.value.every((item) => room.equipment.includes(item))
+    ) {
       return false
     }
     return true
   })
-  const freeCount = (room) => classroom.freeSlotsOf(room, Number(classroom.criteria.day) || 3).length
+
+  const freeCount = (room) =>
+    classroom.freeSlotsOf(
+      room,
+      Number(classroom.criteria.day) || 3,
+      classroom.criteria.date,
+    ).length
   const sorters = {
     rating: (a, b) => b.rating - a.rating,
     capacity: (a, b) => b.capacity - a.capacity,
     distance: (a, b) => a.distance - b.distance,
     free: (a, b) => freeCount(b) - freeCount(a),
   }
+
   return list.sort(sorters[roomSort.value] || sorters.rating)
 })
 
-function toggleRoomFeature(item) {
-  roomFeatures.value = roomFeatures.value.includes(item)
-    ? roomFeatures.value.filter((entry) => entry !== item)
-    : [...roomFeatures.value, item]
+function toggleRoomEquipment(value) {
+  roomEquipment.value = roomEquipment.value.includes(value)
+    ? roomEquipment.value.filter((item) => item !== value)
+    : [...roomEquipment.value, value]
 }
 
 function resetRoomFilters() {
   roomSearch.value = ''
   roomCapacity.value = 0
-  roomFeatures.value = []
+  roomEquipment.value = []
   roomSort.value = 'rating'
 }
 
@@ -233,105 +239,106 @@ function scrollToRooms() {
   document.getElementById('all-rooms')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-/* ---------- 抽屉 / 申请弹窗 ---------- */
-const drawerVisible = ref(false)
-const drawerRoom = ref(null)
+/* ---------- 抽屉 / 申请 ---------- */
+const drawerOpen = ref(false)
+const activeRoom = ref(null)
 const drawerDay = ref(3)
-
-const applyVisible = ref(false)
+const applyOpen = ref(false)
 const applyRoom = ref(null)
 const applyPrefill = ref({})
 
 function openRoom(room) {
-  drawerRoom.value = room
+  activeRoom.value = room
   drawerDay.value = Number(classroom.criteria.day) || 3
-  drawerVisible.value = true
+  drawerOpen.value = true
 }
 
-function openApply(room, preset = {}) {
+function openApply(room, options = {}) {
   if (!room) return
   applyRoom.value = room
   applyPrefill.value = {
-    day: Number(preset.day) || Number(classroom.criteria.day) || 3,
-    start: preset.start || classroom.criteria.start,
-    end: preset.end || classroom.criteria.end,
-    people: Number(preset.people) || Number(classroom.criteria.capacity) || 30,
-    purpose: preset.purpose || classroom.criteria.purpose || '班会',
+    day: Number(options.day) || Number(classroom.criteria.day) || 3,
+    start: options.start || classroom.criteria.start,
+    end: options.end || classroom.criteria.end,
+    people: Number(options.people) || Number(classroom.criteria.capacity) || 30,
+    purpose: options.purpose || classroom.criteria.purpose || '班会',
   }
-  applyVisible.value = true
+  applyOpen.value = true
 }
 
-function onDrawerApply(payload) {
-  if (!payload?.room) return
-  openApply(payload.room, { day: payload.day })
+function handleDrawerApply(payload) {
+  if (payload?.room) openApply(payload.room, { day: payload.day })
 }
 
-/* ---------- AI 预填 ---------- */
-function readAiQuery() {
+/* ---------- 从 AI 链接带入条件 ---------- */
+function parseQuery() {
   const query = route.query || {}
-  const patch = {}
+  const result = {}
   const day = Number(query.day)
-  if (day >= 1 && day <= 7) patch.day = day
+  if (day >= 1 && day <= 7) result.day = day
 
   const isTime = (value) => /^\d{2}:\d{2}$/.test(String(value || ''))
   if (isTime(query.start) && isTime(query.end)) {
-    patch.start = String(query.start)
-    patch.end = String(query.end)
+    result.start = String(query.start)
+    result.end = String(query.end)
   } else if (isTime(query.start)) {
     const slot = classroom.filters.slots.find((item) => item.start === String(query.start))
     if (slot) {
-      patch.start = slot.start
-      patch.end = slot.end
+      result.start = slot.start
+      result.end = slot.end
     }
   } else if (isTime(query.end)) {
     const slot = classroom.filters.slots.find((item) => item.end === String(query.end))
     if (slot) {
-      patch.start = slot.start
-      patch.end = slot.end
+      result.start = slot.start
+      result.end = slot.end
     }
   }
 
   const capacity = Number(query.capacity)
   if (String(query.capacity || '') !== '' && Number.isFinite(capacity) && capacity > 0) {
-    patch.capacity = capacity
+    result.capacity = capacity
   }
 
   const equipment = String(query.equipment || '')
     .split(/[,，、\s]+/)
     .filter(Boolean)
-  if (equipment.length) patch.equipment = equipment
+  if (equipment.length) result.equipment = equipment
 
   const building = String(query.building || '').trim()
-  if (building === '东校区' || building === '西校区') patch.campus = building
-  else if (classroom.filters.buildings.includes(building)) patch.building = building
+  if (building === '东校区' || building === '西校区') {
+    result.campus = building
+  } else if (classroom.filters.buildings.includes(building)) {
+    result.building = building
+  }
 
   const kind = String(query.kind || '').trim()
-  if (classroom.filters.kinds.includes(kind)) patch.kind = kind
+  if (classroom.filters.kinds.includes(kind)) result.kind = kind
 
   const purpose = String(query.purpose || '').trim()
-  if (purpose) patch.purpose = purpose
+  if (purpose) result.purpose = purpose
 
-  return patch
+  return result
 }
 
-function tagsFor(patch) {
+function queryTags(criteria) {
   const tags = []
-  if (patch.day) tags.push(WEEK_CN[patch.day % 7])
-  if (patch.start && patch.end) tags.push(`${patch.start}–${patch.end}`)
-  if (patch.capacity) tags.push(`${patch.capacity} 人`)
-  if (patch.campus) tags.push(patch.campus)
-  if (patch.building) tags.push(patch.building)
-  if (patch.kind) tags.push(patch.kind)
-  if (patch.purpose) tags.push(patch.purpose)
-  if (patch.equipment?.length) tags.push(patch.equipment.join(' / '))
+  if (criteria.day) tags.push(WEEK_CN[criteria.day % 7])
+  if (criteria.start && criteria.end) tags.push(`${criteria.start}–${criteria.end}`)
+  if (criteria.capacity) tags.push(`${criteria.capacity} 人`)
+  if (criteria.campus) tags.push(criteria.campus)
+  if (criteria.building) tags.push(criteria.building)
+  if (criteria.kind) tags.push(criteria.kind)
+  if (criteria.purpose) tags.push(criteria.purpose)
+  if (criteria.equipment?.length) tags.push(criteria.equipment.join(' / '))
   return tags
 }
 
 onMounted(async () => {
   if (String(route.query.from) !== 'ai') return
-  const patch = readAiQuery()
-  if (Object.keys(patch).length) classroom.setCriteria(patch)
-  prefillTags.value = tagsFor(patch)
+  const parsed = parseQuery()
+  if (Object.keys(parsed).length) classroom.setCriteria(parsed)
+  prefillTags.value = queryTags(parsed)
   prefillEmpty.value = prefillTags.value.length === 0
   aiPrefill.value = true
   await classroom.recommend()
@@ -341,104 +348,106 @@ onMounted(async () => {
 <template>
   <div class="page classroom-page">
     <PageHeader
+      eyebrow="场景 01 · 资源匹配"
       title="教室借用"
-      :desc="`说清人数、时段与设备，AI 从 ${classroom.rooms.length} 处教学场所中匹配空闲方案，推荐理由可追溯、可一键提交。`"
+      :desc="`从 ${classroom.rooms.length} 处教学场所中，按课表、容量、设备与距离挑一间合适的。`"
     >
       <template #actions>
         <el-button @click="router.push('/classroom/status')">
           <el-icon><Tickets /></el-icon>
-          我的申请
+          申请与审核
           <span v-if="pendingCount" class="action-count">{{ pendingCount }}</span>
         </el-button>
       </template>
     </PageHeader>
 
-    <!-- ============ AI 需求条 ============ -->
     <section class="ai-bar">
-      <div class="ai-bar__grid" aria-hidden="true"></div>
-      <div class="ai-bar__glow ai-bar__glow--a" aria-hidden="true"></div>
-      <div class="ai-bar__glow ai-bar__glow--b" aria-hidden="true"></div>
-
       <div class="ai-bar__body">
         <div class="ai-bar__main">
           <div class="ai-bar__eyebrow">
-            <span class="dot dot--brand dot--pulse"></span>
+            <span class="dot" />
             AI 一句话找教室
-            <AiBadge text="意图解析" ghost small />
+            <AiBadge text="自然语言" small />
           </div>
-          <h2 class="ai-bar__title">
-            说清人数、时间和设备，<span>剩下的交给 AI。</span>
-          </h2>
+          <h2 class="ai-bar__title">把需求说清楚，<span>剩下的交给课表。</span></h2>
           <div class="ai-bar__input">
             <span class="ai-bar__orb">
-              <el-icon :size="17"><MagicStick /></el-icon>
+              <el-icon><MagicStick /></el-icon>
             </span>
             <input
               v-model="aiText"
               class="ai-bar__field"
-              placeholder="例如：周三下午 3 点，30 人开班会，要投影和空调"
               maxlength="80"
+              placeholder="例如：周三下午 30 人开班会，要投影和空调"
               @keyup.enter="submitAi"
             />
             <span class="ai-bar__kbd">Enter</span>
             <button type="button" class="ai-bar__submit" @click="submitAi">
-              让 AI 推荐
-              <el-icon :size="13"><ArrowRight /></el-icon>
+              解析需求
+              <el-icon><ArrowRight /></el-icon>
             </button>
           </div>
           <div class="ai-bar__examples">
-            <span>试试这样说</span>
-            <button v-for="example in examples" :key="example" type="button" @click="useExample(example)">
-              {{ example }}
+            <span>试试：</span>
+            <button
+              v-for="item in examples"
+              :key="item"
+              type="button"
+              @click="useExample(item)"
+            >
+              {{ item }}
             </button>
           </div>
         </div>
 
-        <div class="ai-bar__side">
+        <aside class="ai-bar__side">
           <div class="ai-bar__metric">
             <span>可用教学场所</span>
-            <b>{{ classroom.stats.rooms }}<small>处</small></b>
+            <b>{{ classroom.stats.rooms }}</b>
+            <em>处</em>
           </div>
           <div class="ai-bar__metric">
             <span>覆盖工作日</span>
-            <b>5<small>天</small></b>
+            <b>5</b>
+            <em>天</em>
           </div>
           <div class="ai-bar__metric">
             <span>平均匹配耗时</span>
-            <b>0.9<small>s</small></b>
+            <b>0.9</b>
+            <em>s</em>
           </div>
-          <p class="ai-bar__foot">
-            <el-icon :size="12"><CircleCheck /></el-icon>
-            已同步本周课表 · 推荐理由可追溯
-          </p>
-        </div>
+          <p class="ai-bar__foot">AI 只做筛选与排序，具体借用仍需管理员审核。</p>
+        </aside>
       </div>
     </section>
 
-    <!-- ============ AI 预填提示 ============ -->
     <div v-if="aiPrefill" class="notice prefill">
       <span class="prefill__icon">
-        <el-icon :size="16"><MagicStick /></el-icon>
+        <el-icon><MagicStick /></el-icon>
       </span>
       <div class="prefill__text">
-        <strong>已根据你的描述预填筛选条件</strong>
-        <p v-if="!prefillEmpty">识别结果：{{ prefillTags.join(' · ') }}</p>
-        <p v-else>未识别到明确条件，已按默认条件（周三 15:00–17:00 · 30 人）为你推荐。</p>
+        <strong>{{ prefillEmpty ? '未能从这句话中识别出条件' : '已按你的描述填入筛选条件' }}</strong>
+        <p>
+          {{
+            prefillEmpty
+              ? '可以补充人数、时段或设备，也可以直接手动筛选。'
+              : `识别结果：${prefillTags.join(' · ')}`
+          }}
+        </p>
       </div>
-      <button type="button" class="prefill__close" aria-label="关闭提示" @click="aiPrefill = false">
-        <el-icon :size="14"><Close /></el-icon>
+      <button class="prefill__close" type="button" aria-label="关闭" @click="aiPrefill = false">
+        <el-icon><Close /></el-icon>
       </button>
     </div>
 
-    <!-- ============ 筛选条件 ============ -->
-    <SectionCard title="筛选条件" desc="容量、时段与设备是硬性条件，AI 再按距离与好评综合排序">
+    <SectionCard title="筛选条件" desc="容量、时段与设备是硬性条件，其余用于排序与说明。">
       <template #actions>
         <div class="filter-actions">
-          <el-button text @click="resetFilters">
+          <el-button @click="resetCriteria">
             <el-icon><Refresh /></el-icon>
             重置
           </el-button>
-          <el-button type="primary" :loading="classroom.loading" @click="recommendNow">
+          <el-button type="primary" :loading="classroom.loading" @click="recommend">
             <el-icon v-if="!classroom.loading"><MagicStick /></el-icon>
             {{ classroom.loading ? 'AI 匹配中…' : 'AI 推荐教室' }}
           </el-button>
@@ -448,117 +457,107 @@ onMounted(async () => {
       <div class="filter-row">
         <span class="filter-row__label">校区</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              type="button"
-              class="chip"
-              :class="{ 'is-active': !classroom.criteria.campus }"
-              @click="setCampus('')"
-            >
-              全部校区
-            </button>
-            <button
-              v-for="campus in campuses"
-              :key="campus"
-              type="button"
-              class="chip"
-              :class="{ 'is-active': classroom.criteria.campus === campus }"
-              @click="setCampus(campus)"
-            >
-              {{ campus }}
-            </button>
-          </div>
+          <button
+            type="button"
+            class="chip"
+            :class="{ 'is-active': !classroom.criteria.campus }"
+            @click="setCampus('')"
+          >
+            全部校区
+          </button>
+          <button
+            v-for="campus in campuses"
+            :key="campus"
+            type="button"
+            class="chip"
+            :class="{ 'is-active': classroom.criteria.campus === campus }"
+            @click="setCampus(campus)"
+          >
+            {{ campus }}
+          </button>
         </div>
       </div>
 
       <div v-if="classroom.filters.buildings.length > 2" class="filter-row">
         <span class="filter-row__label">楼栋</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              type="button"
-              class="chip"
-              :class="{ 'is-active': !classroom.criteria.building }"
-              @click="setBuilding('')"
-            >
-              全部楼栋
-            </button>
-            <button
-              v-for="building in classroom.filters.buildings.filter((item) => item !== '全部楼栋')"
-              :key="building"
-              type="button"
-              class="chip"
-              :class="{ 'is-active': classroom.criteria.building === building }"
-              @click="setBuilding(building)"
-            >
-              {{ building }}
-            </button>
-          </div>
+          <button
+            type="button"
+            class="chip"
+            :class="{ 'is-active': !classroom.criteria.building }"
+            @click="setBuilding('')"
+          >
+            全部楼栋
+          </button>
+          <button
+            v-for="building in classroom.filters.buildings.filter((item) => item !== '全部楼栋')"
+            :key="building"
+            type="button"
+            class="chip"
+            :class="{ 'is-active': classroom.criteria.building === building }"
+            @click="setBuilding(building)"
+          >
+            {{ building }}
+          </button>
         </div>
       </div>
 
       <div class="filter-row">
         <span class="filter-row__label">类型</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              type="button"
-              class="chip"
-              :class="{ 'is-active': !classroom.criteria.kind }"
-              @click="setKind('')"
-            >
-              全部类型
-            </button>
-            <button
-              v-for="kind in classroom.filters.kinds.filter((item) => item !== '全部类型')"
-              :key="kind"
-              type="button"
-              class="chip"
-              :class="{ 'is-active': classroom.criteria.kind === kind }"
-              @click="setKind(kind)"
-            >
-              {{ kind }}
-            </button>
-          </div>
+          <button
+            type="button"
+            class="chip"
+            :class="{ 'is-active': !classroom.criteria.kind }"
+            @click="setKind('')"
+          >
+            全部类型
+          </button>
+          <button
+            v-for="kind in classroom.filters.kinds.filter((item) => item !== '全部类型')"
+            :key="kind"
+            type="button"
+            class="chip"
+            :class="{ 'is-active': classroom.criteria.kind === kind }"
+            @click="setKind(kind)"
+          >
+            {{ kind }}
+          </button>
         </div>
       </div>
 
       <div class="filter-row">
         <span class="filter-row__label">星期</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              v-for="day in dayOptions"
-              :key="day"
-              type="button"
-              class="chip"
-              :class="{ 'is-active': Number(classroom.criteria.day) === day }"
-              @click="setDay(day)"
-            >
-              {{ WEEK_CN[day % 7] }}
-            </button>
-          </div>
+          <button
+            v-for="day in dayOptions"
+            :key="day"
+            type="button"
+            class="chip"
+            :class="{ 'is-active': Number(classroom.criteria.day) === day }"
+            @click="setDay(day)"
+          >
+            {{ WEEK_CN[day % 7] }}
+          </button>
         </div>
       </div>
 
       <div class="filter-row">
         <span class="filter-row__label">时段</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              v-for="slot in classroom.filters.slots"
-              :key="slot.start"
-              type="button"
-              class="chip"
-              :class="{
-                'is-active':
-                  classroom.criteria.start === slot.start && classroom.criteria.end === slot.end,
-              }"
-              @click="selectSlot(slot)"
-            >
-              {{ slot.label }}
-            </button>
-          </div>
+          <button
+            v-for="slot in classroom.filters.slots"
+            :key="slot.start"
+            type="button"
+            class="chip"
+            :class="{
+              'is-active':
+                classroom.criteria.start === slot.start && classroom.criteria.end === slot.end,
+            }"
+            @click="setSlot(slot)"
+          >
+            {{ slot.label }}
+          </button>
         </div>
       </div>
 
@@ -574,79 +573,71 @@ onMounted(async () => {
             class="capacity-input"
           />
           <span class="filter-hint">人起 · 0 表示不限</span>
-          <div class="chip-row">
-            <button
-              v-for="value in capacityPresets"
-              :key="value"
-              type="button"
-              class="chip chip--sm"
-              :class="{ 'is-active': Number(classroom.criteria.capacity) === value }"
-              @click="setCapacity(value)"
-            >
-              {{ value ? `${value} 人` : '不限' }}
-            </button>
-          </div>
+          <button
+            v-for="preset in capacityPresets"
+            :key="preset"
+            type="button"
+            class="chip chip--sm"
+            :class="{ 'is-active': Number(classroom.criteria.capacity) === preset }"
+            @click="setCapacity(preset)"
+          >
+            {{ preset ? `${preset} 人` : '不限' }}
+          </button>
         </div>
       </div>
 
       <div class="filter-row">
         <span class="filter-row__label">用途</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              v-for="purpose in classroom.filters.purposes"
-              :key="purpose"
-              type="button"
-              class="chip chip--sm"
-              :class="{ 'is-active': classroom.criteria.purpose === purpose }"
-              @click="togglePurpose(purpose)"
-            >
-              {{ purpose }}
-            </button>
-          </div>
+          <button
+            v-for="purpose in classroom.filters.purposes"
+            :key="purpose"
+            type="button"
+            class="chip chip--sm"
+            :class="{ 'is-active': classroom.criteria.purpose === purpose }"
+            @click="setPurpose(purpose)"
+          >
+            {{ purpose }}
+          </button>
         </div>
       </div>
 
       <div class="filter-row">
         <span class="filter-row__label">设备</span>
         <div class="filter-row__control">
-          <div class="chip-row">
-            <button
-              v-for="item in classroom.filters.equipment"
-              :key="item"
-              type="button"
-              class="chip chip--sm"
-              :class="{ 'is-active': classroom.criteria.equipment.includes(item) }"
-              @click="toggleEquipment(item)"
-            >
-              {{ item }}
-            </button>
-          </div>
+          <button
+            v-for="equipment in classroom.filters.equipment"
+            :key="equipment"
+            type="button"
+            class="chip chip--sm"
+            :class="{ 'is-active': classroom.criteria.equipment.includes(equipment) }"
+            @click="toggleEquipment(equipment)"
+          >
+            {{ equipment }}
+          </button>
         </div>
       </div>
     </SectionCard>
 
-    <!-- ============ AI 推荐结果 ============ -->
     <section class="page-section rec-section">
       <div class="section-head">
         <div>
-          <div class="section-head__title">
+          <h2 class="section-head__title">
             AI 推荐结果
             <AiBadge text="实时计算" ghost small />
-          </div>
+          </h2>
           <p class="section-head__desc">{{ recommendationDesc }}</p>
         </div>
         <div class="rec-head__actions">
           <span v-if="classroom.recommendations.length && !classroom.loading" class="rec-head__meta">
-            <el-icon :size="11"><StarFilled /></el-icon>
+            <el-icon><StarFilled /></el-icon>
             按匹配度排序
           </span>
           <el-button
             v-if="classroom.lastCriteria"
-            text
             size="small"
             :loading="classroom.loading"
-            @click="recommendNow"
+            @click="recommend"
           >
             <el-icon v-if="!classroom.loading"><Refresh /></el-icon>
             重新推荐
@@ -654,36 +645,63 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div
-        v-if="criteriaDirty && !classroom.loading"
-        class="notice notice--amber dirty-note"
-      >
-        <el-icon :size="14"><Warning /></el-icon>
+      <div v-if="criteriaDirty && !classroom.loading" class="notice notice--amber dirty-note">
+        <el-icon><Warning /></el-icon>
         <span class="grow">筛选条件已调整，当前结果可能已过期，建议重新计算一次。</span>
-        <el-button text size="small" @click="recommendNow">重新计算</el-button>
+        <el-button size="small" @click="recommend">重新计算</el-button>
       </div>
 
-      <!-- loading 骨架 -->
       <div v-if="classroom.loading" class="rec-grid">
         <div v-for="index in 3" :key="index" class="rec-skeleton card">
-          <div class="sk sk--pill"></div>
+          <div class="sk sk--pill" />
           <div class="rec-skeleton__head">
-            <div class="sk sk--art"></div>
+            <div class="sk sk--art" />
             <div class="grow">
-              <div class="sk sk--line w70"></div>
-              <div class="sk sk--line w50"></div>
+              <div class="sk sk--line w70" />
+              <div class="sk sk--line w50" />
             </div>
-            <div class="sk sk--ring"></div>
+            <div class="sk sk--ring" />
           </div>
-          <div class="sk sk--stats"></div>
-          <div class="sk sk--line w90"></div>
-          <div class="sk sk--line w60"></div>
-          <div class="sk sk--block"></div>
+          <div class="sk sk--stats" />
+          <div class="sk sk--line w90" />
+          <div class="sk sk--line w60" />
+          <div class="sk sk--block" />
         </div>
       </div>
 
-      <!-- 初始状态 -->
-      <div v-else-if="!classroom.lastCriteria" class="rec-empty card card--gradient">
+      <template v-else-if="classroom.lastCriteria">
+        <div v-if="classroom.recommendations.length" class="rec-grid">
+          <RecommendCard
+            v-for="(item, index) in classroom.recommendations"
+            :key="item.room.id"
+            :item="item"
+            :rank="index + 1"
+            :criteria="classroom.criteria"
+            @apply="openApply"
+            @detail="openRoom"
+          />
+        </div>
+        <div v-else class="rec-empty card">
+          <div class="rec-empty__badge">
+            <AiBadge ghost small />
+            <span>AI 检索完成 · 0 个完全匹配</span>
+          </div>
+          <EmptyState
+            title="没有完全匹配的场所"
+            :desc="`按当前条件（${criteriaText(classroom.lastCriteria)}）没有找到完全匹配的教学场所。可以清空设备要求、调整时段，或直接浏览全部教学场所。`"
+          >
+            <div class="filter-actions">
+              <el-button v-if="classroom.criteria.equipment.length" @click="clearEquipmentAndRecommend">
+                清空设备要求
+              </el-button>
+              <el-button type="primary" @click="recommend">重新推荐</el-button>
+              <el-button text @click="scrollToRooms">浏览全部场所</el-button>
+            </div>
+          </EmptyState>
+        </div>
+      </template>
+
+      <div v-else class="rec-empty card">
         <div class="rec-empty__badge">
           <AiBadge ghost small />
           <span>等待你的需求</span>
@@ -694,48 +712,15 @@ onMounted(async () => {
         >
           <template #icon>
             <span class="rec-empty__icon">
-              <el-icon :size="24"><MagicStick /></el-icon>
+              <el-icon><MagicStick /></el-icon>
             </span>
           </template>
-          <div class="row gap-2 wrap center">
-            <el-button type="primary" :loading="classroom.loading" @click="recommendNow">
+          <div class="filter-actions">
+            <el-button type="primary" :loading="classroom.loading" @click="recommend">
               <el-icon><MagicStick /></el-icon>
               让 AI 推荐
             </el-button>
             <el-button text @click="scrollToRooms">先自己看看全部场所</el-button>
-          </div>
-        </EmptyState>
-      </div>
-
-      <!-- 推荐结果 -->
-      <div v-else-if="classroom.recommendations.length" class="rec-grid">
-        <RecommendCard
-          v-for="(item, index) in classroom.recommendations"
-          :key="item.room.id"
-          :item="item"
-          :rank="index + 1"
-          :criteria="classroom.criteria"
-          @apply="openApply"
-          @detail="openRoom"
-        />
-      </div>
-
-      <!-- 无结果 -->
-      <div v-else class="rec-empty card">
-        <div class="rec-empty__badge">
-          <AiBadge ghost small />
-          <span>AI 检索完成 · 0 个完全匹配</span>
-        </div>
-        <EmptyState
-          title="没有完全匹配的场所"
-          :desc="`按当前条件（${criteriaText(classroom.lastCriteria)}）没有找到完全匹配的教学场所。可以清空设备要求、调整时段，或直接浏览全部教学场所。`"
-        >
-          <div class="row gap-2 wrap center">
-            <el-button v-if="classroom.criteria.equipment.length" @click="relaxEquipment">
-              清空设备要求
-            </el-button>
-            <el-button type="primary" @click="recommendNow">重新推荐</el-button>
-            <el-button text @click="scrollToRooms">浏览全部场所</el-button>
           </div>
         </EmptyState>
       </div>
@@ -748,22 +733,24 @@ onMounted(async () => {
       </div>
     </section>
 
-    <!-- ============ 全部教学场所 ============ -->
     <section id="all-rooms" class="page-section rooms-section">
       <div class="section-head rooms-head">
         <div>
-          <div class="section-head__title">
+          <h2 class="section-head__title">
             全部教学场所
-            <span class="rooms-count">
-              {{ filteredRooms.length }} / {{ classroom.rooms.length }} 处
-            </span>
-          </div>
+            <span class="rooms-count">{{ filteredRooms.length }} / {{ classroom.rooms.length }} 处</span>
+          </h2>
           <p class="section-head__desc">
             点击卡片查看 {{ WEEK_CN[Number(classroom.criteria.day) % 7] }} 课表与空闲时段，卡片下方为当天占用概览。
           </p>
         </div>
         <div class="rooms-tools">
-          <el-input v-model="roomSearch" placeholder="搜索房号 / 班级 / 类型" clearable class="rooms-search">
+          <el-input
+            v-model="roomSearch"
+            placeholder="搜索房号 / 班级 / 类型"
+            clearable
+            class="rooms-search"
+          >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
@@ -782,34 +769,35 @@ onMounted(async () => {
       <div class="rooms-filter card">
         <div class="rooms-filter__row">
           <span class="rooms-filter__label">容量</span>
-          <div class="chip-row">
+          <div class="filter-row__control">
             <button
-              v-for="value in capacityPresets"
-              :key="`cap-${value}`"
+              v-for="preset in capacityPresets"
+              :key="`cap-${preset}`"
               type="button"
               class="chip chip--sm"
-              :class="{ 'is-active': roomCapacity === value }"
-              @click="roomCapacity = value"
+              :class="{ 'is-active': roomCapacity === preset }"
+              @click="roomCapacity = preset"
             >
-              {{ value ? `≥ ${value} 人` : '不限' }}
+              {{ preset ? `≥ ${preset} 人` : '不限' }}
             </button>
           </div>
         </div>
+
         <div class="rooms-filter__row">
           <span class="rooms-filter__label">设备</span>
-          <div class="chip-row">
+          <div class="filter-row__control">
             <button
-              v-for="item in classroom.filters.equipment"
-              :key="`eq-${item}`"
+              v-for="equipment in classroom.filters.equipment"
+              :key="`eq-${equipment}`"
               type="button"
               class="chip chip--sm"
-              :class="{ 'is-active': roomFeatures.includes(item) }"
-              @click="toggleRoomFeature(item)"
+              :class="{ 'is-active': roomEquipment.includes(equipment) }"
+              @click="toggleRoomEquipment(equipment)"
             >
-              {{ item }}
+              {{ equipment }}
             </button>
             <button
-              v-if="roomFeatures.length || roomCapacity || roomSearch"
+              v-if="roomEquipment.length || roomCapacity || roomSearch"
               type="button"
               class="chip chip--sm rooms-filter__clear"
               @click="resetRoomFilters"
@@ -821,16 +809,21 @@ onMounted(async () => {
       </div>
 
       <div v-if="filteredRooms.length" class="room-grid">
-        <RoomCard
-          v-for="room in filteredRooms"
-          :key="room.id"
-          :room="room"
-          :day="Number(classroom.criteria.day) || 3"
-          @open="openRoom"
-        />
+          <RoomCard
+            v-for="room in filteredRooms"
+            :key="room.id"
+            :room="room"
+            :day="Number(classroom.criteria.day) || 3"
+            :date="classroom.criteria.date"
+            @open="openRoom"
+          />
       </div>
-      <div v-else class="card rooms-empty">
-        <EmptyState compact title="没有符合条件的场所" desc="试试放宽容量、类型或设备筛选，或直接搜索房号与班级。">
+      <div v-else class="rooms-empty card">
+        <EmptyState
+          compact
+          title="没有符合条件的场所"
+          desc="试试放宽容量、类型或设备筛选，或直接搜索房号与班级。"
+        >
           <el-button @click="resetRoomFilters">重置资源筛选</el-button>
         </EmptyState>
       </div>
@@ -842,249 +835,213 @@ onMounted(async () => {
     </footer>
 
     <RoomDrawer
-      v-model="drawerVisible"
-      :room="drawerRoom"
+      v-model="drawerOpen"
+      :room="activeRoom"
       :day="drawerDay"
-      @apply="onDrawerApply"
+      :date="classroom.criteria.date"
+      @apply="handleDrawerApply"
     />
-    <ApplyDialog v-model="applyVisible" :room="applyRoom" :prefill="applyPrefill" />
+    <ApplyDialog v-model="applyOpen" :room="applyRoom" :prefill="applyPrefill" />
   </div>
 </template>
 
 <style scoped>
-.classroom-page {
-  max-width: var(--content-max);
-}
-
-.action-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  margin-left: 2px;
-  padding: 0 5px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-500);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-/* ---------- AI 需求条 ---------- */
+/* ---------- AI 需求条：浅底、左重右轻 ---------- */
 .ai-bar {
   position: relative;
-  overflow: hidden;
-  border-radius: 24px;
-  background: radial-gradient(130% 130% at 10% 0%, #2c2866 0%, #191c3c 48%, #0e1023 100%);
-  color: #fff;
-  box-shadow: 0 30px 70px -42px rgba(20, 20, 60, 0.9);
+  overflow: visible;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-1);
+  box-shadow: none;
 }
 
-.ai-bar__grid {
+/* 左侧 2px 竖线：给零底色的 AI 区块一个锚点，与右侧描边面板同量级；
+   线落在页边距里，不改变任何内容的左右对齐 */
+.ai-bar::before {
+  content: '';
   position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(80% 80% at 18% 10%, #000 20%, transparent 82%);
-}
-
-.ai-bar__glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  pointer-events: none;
-}
-
-.ai-bar__glow--a {
-  width: 380px;
-  height: 380px;
-  top: -160px;
-  right: -40px;
-  background: rgba(108, 99, 255, 0.38);
-}
-
-.ai-bar__glow--b {
-  width: 280px;
-  height: 280px;
-  bottom: -150px;
-  left: 28%;
-  background: rgba(18, 179, 166, 0.2);
+  top: 0;
+  bottom: 0;
+  left: -16px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--brand-400);
 }
 
 .ai-bar__body {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(238px, 0.65fr);
-  gap: clamp(22px, 4vw, 46px);
-  padding: clamp(22px, 2.6vw, 32px) clamp(22px, 3vw, 36px);
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 0.75fr);
+  gap: clamp(32px, 5vw, 48px);
+  padding: 24px 0 32px;
 }
 
 .ai-bar__eyebrow {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.56);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
 }
 
 .ai-bar__title {
-  margin: 13px 0 0;
-  font-size: clamp(22px, 2.25vw, 30px);
-  font-weight: 760;
-  line-height: 1.32;
-  letter-spacing: -0.04em;
+  margin: 16px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(24px, 2.4vw, 32px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: var(--text-1);
 }
 
 .ai-bar__title span {
-  color: rgba(255, 255, 255, 0.52);
-  font-weight: 600;
+  color: var(--text-3);
+  font-weight: 400;
 }
 
 .ai-bar__input {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-top: 19px;
-  padding: 7px 7px 7px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  gap: 8px;
+  margin-top: 24px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: none;
   transition:
-    box-shadow 0.2s var(--ease-out),
-    border-color 0.2s var(--ease-out);
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .ai-bar__input:focus-within {
-  border-color: rgba(160, 152, 255, 0.9);
-  box-shadow:
-    0 0 0 4px rgba(108, 99, 255, 0.18),
-    0 18px 40px -24px rgba(0, 0, 0, 0.7);
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-50);
 }
 
 .ai-bar__orb {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: none;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
-  color: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--brand-600);
+  color: var(--text-invert);
 }
 
 .ai-bar__field {
   flex: 1;
   min-width: 0;
-  padding: 5px 0;
+  padding: 4px 0;
   border: none;
   outline: none;
   background: none;
   font-family: inherit;
-  font-size: 13.5px;
-  color: #171a2c;
+  font-size: var(--fs-base);
+  color: var(--text-1);
 }
 
 .ai-bar__field::placeholder {
-  color: #9aa0b4;
+  color: var(--text-4);
 }
 
 .ai-bar__kbd {
   flex: none;
-  padding: 3px 6px;
-  border: 1px solid #e6e6f2;
-  border-radius: 6px;
-  background: #f6f6fc;
+  padding: 0px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: #9aa0b4;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
 }
 
 .ai-bar__submit {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 38px;
-  padding: 0 15px;
+  gap: 4px;
+  height: 36px;
+  padding: 0 16px;
   flex: none;
   border: none;
-  border-radius: 11px;
-  background: linear-gradient(135deg, #6c63ff, #5a50f0);
-  color: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--brand-600);
+  color: var(--text-invert);
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 10px 22px -10px rgba(90, 80, 240, 0.8);
-  transition: all 0.2s var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .ai-bar__submit:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px -10px rgba(90, 80, 240, 0.9);
+  background: var(--brand-700);
 }
 
 .ai-bar__examples {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 11px;
+  gap: 4px;
+  margin-top: 12px;
 }
 
 .ai-bar__examples > span {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.42);
+  font-size: var(--fs-xs);
+  color: var(--text-4);
 }
 
 .ai-bar__examples button {
   max-width: 100%;
-  padding: 4px 9px;
+  padding: 4px 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-3);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   white-space: nowrap;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: all 0.2s var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .ai-bar__examples button:hover {
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text-1);
 }
 
 .ai-bar__side {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 10px;
-  padding: 16px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(14px);
+  gap: 8px;
+  align-self: center;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
 }
 
 .ai-bar__metric {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--line);
 }
 
 .ai-bar__metric:last-of-type {
@@ -1093,40 +1050,42 @@ onMounted(async () => {
 }
 
 .ai-bar__metric span {
-  font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
 }
 
 .ai-bar__metric b {
-  font-size: 22px;
-  font-weight: 750;
-  letter-spacing: -0.04em;
-  color: #fff;
+  font-family: var(--font-serif);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-1);
   font-variant-numeric: tabular-nums;
 }
 
 .ai-bar__metric b small {
-  margin-left: 2px;
-  font-size: 9px;
-  font-weight: 550;
-  color: rgba(255, 255, 255, 0.45);
+  margin-left: 0px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-3);
 }
 
 .ai-bar__foot {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin: 2px 0 0;
-  font-size: 9.5px;
-  color: rgba(255, 255, 255, 0.42);
+  margin: 8px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
 }
 
 /* ---------- 预填提示 ---------- */
 .prefill {
   align-items: center;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--brand-100);
-  background: linear-gradient(120deg, var(--brand-50), var(--teal-50));
+  background: var(--brand-50);
   color: var(--text-2);
 }
 
@@ -1137,8 +1096,8 @@ onMounted(async () => {
   width: 30px;
   height: 30px;
   flex: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
 }
 
@@ -1149,14 +1108,14 @@ onMounted(async () => {
 
 .prefill__text strong {
   display: block;
-  font-size: 12.5px;
-  font-weight: 680;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .prefill__text p {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
   line-height: 1.55;
 }
@@ -1176,7 +1135,7 @@ onMounted(async () => {
 }
 
 .prefill__close:hover {
-  background: rgba(108, 99, 255, 0.08);
+  background: var(--brand-50);
   color: var(--brand-600);
 }
 
@@ -1193,7 +1152,7 @@ onMounted(async () => {
   grid-template-columns: 78px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  padding: 11px 0;
+  padding: 8px 0;
 }
 
 .filter-row:first-child {
@@ -1205,15 +1164,15 @@ onMounted(async () => {
 }
 
 .filter-row + .filter-row {
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .filter-row__label {
-  padding-top: 7px;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--text-3);
-  letter-spacing: 0.03em;
+  padding-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 0;
 }
 
 .filter-row__control {
@@ -1229,7 +1188,7 @@ onMounted(async () => {
 }
 
 .filter-hint {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1242,7 +1201,7 @@ onMounted(async () => {
 .rec-head__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1250,7 +1209,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1267,16 +1226,16 @@ onMounted(async () => {
 
 .rec-empty {
   position: relative;
-  padding: 10px;
+  padding: 8px;
 }
 
 .rec-empty__badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   padding-top: 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1286,10 +1245,10 @@ onMounted(async () => {
   justify-content: center;
   width: 54px;
   height: 54px;
-  border-radius: 17px;
-  background: linear-gradient(135deg, #eeecff, #e6faf7);
+  border-radius: 8px;
+  background: var(--brand-50);
   color: var(--brand-500);
-  box-shadow: 0 12px 26px -18px rgba(108, 99, 255, 0.8);
+  box-shadow: none;
 }
 
 .rec-foot {
@@ -1297,11 +1256,11 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 10px 13px;
-  border: 1px dashed var(--line-strong);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-2);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1310,7 +1269,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 18px;
+  padding: 16px;
 }
 
 .rec-skeleton__head {
@@ -1321,7 +1280,7 @@ onMounted(async () => {
 
 .sk {
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--surface-3) 25%, #fff 37%, var(--surface-3) 63%);
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%);
   background-size: 400% 100%;
   animation: sk-shimmer 1.4s ease infinite;
 }
@@ -1336,7 +1295,7 @@ onMounted(async () => {
   width: 52px;
   height: 52px;
   flex: none;
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .sk--line {
@@ -1357,12 +1316,12 @@ onMounted(async () => {
 
 .sk--stats {
   height: 54px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .sk--block {
   height: 86px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .w50 {
@@ -1399,11 +1358,11 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   height: 22px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
   background: var(--surface-3);
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0;
   color: var(--text-3);
 }
@@ -1426,22 +1385,22 @@ onMounted(async () => {
 .rooms-filter {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 16px;
+  gap: 8px;
+  padding: 12px 16px;
 }
 
 .rooms-filter__row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .rooms-filter__label {
   flex: none;
   width: 34px;
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-3);
   letter-spacing: 0.03em;
 }
@@ -1451,14 +1410,15 @@ onMounted(async () => {
 }
 
 .rooms-filter__clear {
-  border-style: dashed;
+  border-style: solid;
   color: var(--coral-600);
 }
 
 .room-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--line);
 }
 
 .rooms-empty {
@@ -1470,36 +1430,41 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: 4px;
-  padding: 14px 4px 4px;
+  padding: 12px 4px 4px;
   border-top: 1px solid var(--line);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 @media (max-width: 900px) {
+  /* 页边距收窄到 16px，竖线跟着内收，仍保持在内容左缘之外 */
+  .ai-bar::before {
+    left: -8px;
+  }
+
   .ai-bar__body {
     grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
+    gap: 16px;
   }
 
   .ai-bar__side {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0 14px;
-    padding: 12px 14px;
+    gap: 0 12px;
+    padding: 12px 12px;
   }
 
   .ai-bar__metric {
     flex-direction: column;
     align-items: flex-start;
-    gap: 3px;
+    gap: 4px;
     padding-bottom: 0;
     border-bottom: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
-    padding-left: 14px;
+    border-left: 1px solid var(--line);
+    padding-left: 12px;
   }
 
   .ai-bar__metric:first-child {
@@ -1508,7 +1473,7 @@ onMounted(async () => {
   }
 
   .ai-bar__metric b {
-    font-size: 19px;
+    font-size: 18px;
   }
 
   .ai-bar__foot {
@@ -1518,11 +1483,11 @@ onMounted(async () => {
 
 @media (max-width: 700px) {
   .ai-bar__body {
-    padding: 20px;
+    padding: 16px 0 24px;
   }
 
   .ai-bar__title {
-    font-size: 21px;
+    font-size: 20px;
   }
 
   .ai-bar__kbd {
@@ -1536,8 +1501,8 @@ onMounted(async () => {
 
   .filter-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-    padding: 10px 0;
+    gap: 4px;
+    padding: 8px 0;
   }
 
   .filter-row__label {
@@ -1572,7 +1537,7 @@ onMounted(async () => {
 @media (max-width: 430px) {
   .ai-bar__input {
     flex-wrap: wrap;
-    gap: 7px;
+    gap: 8px;
   }
 
   .ai-bar__field {
@@ -1590,19 +1555,19 @@ onMounted(async () => {
 
   .ai-bar__side {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: 10px 12px;
+    padding: 8px 12px;
   }
 
   .ai-bar__metric {
-    padding-left: 10px;
+    padding-left: 8px;
   }
 
   .ai-bar__metric span {
-    font-size: 9.5px;
+    font-size: 12px;
   }
 
   .ai-bar__metric b {
-    font-size: 17px;
+    font-size: 18px;
   }
 }
 </style>

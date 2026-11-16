@@ -30,29 +30,31 @@ defineProps({
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 52px 20px;
+  padding: 48px 16px;
   text-align: center;
 }
 
 .empty--compact {
-  padding: 28px 14px;
+  padding: 24px 16px;
 }
 
 .empty__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 58px;
-  height: 58px;
-  margin-bottom: 6px;
-  border-radius: 20px;
-  background: var(--grad-brand-soft);
-  color: var(--brand-500);
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-3);
 }
 
 .empty__title {
-  font-size: var(--fs-md);
-  font-weight: 680;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
   color: var(--text-1);
 }
 
@@ -60,7 +62,7 @@ defineProps({
   margin: 0;
   max-width: 320px;
   font-size: var(--fs-sm);
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--text-3);
 }
 
@@ -68,6 +70,6 @@ defineProps({
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 </style>

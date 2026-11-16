@@ -39,23 +39,23 @@ const current = computed(() => {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--fs-xs);
+  font-weight: 500;
   white-space: nowrap;
   background: var(--surface-3);
   color: var(--text-2);
 }
 
 .pill__dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: currentColor;
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 .pill--brand {
@@ -65,17 +65,17 @@ const current = computed(() => {
 
 .pill--teal {
   background: var(--teal-50);
-  color: var(--teal-600);
+  color: var(--teal-700);
 }
 
 .pill--amber {
   background: var(--amber-50);
-  color: var(--amber-600);
+  color: var(--amber-700);
 }
 
 .pill--coral {
   background: var(--coral-50);
-  color: var(--coral-600);
+  color: var(--coral-700);
 }
 
 .pill--slate {

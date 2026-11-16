@@ -71,7 +71,7 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 26px 10px 6px;
+  padding: 24px 8px 4px;
   text-align: center;
 }
 
@@ -82,10 +82,10 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
   justify-content: center;
   width: 84px;
   height: 84px;
-  margin-bottom: 18px;
-  border-radius: 28px;
-  background: linear-gradient(135deg, #6c63ff, #8f7bff 55%, #12b3a6);
-  box-shadow: 0 18px 40px -18px rgba(108, 99, 255, 0.9);
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: var(--brand-600);
+  box-shadow: none;
 }
 
 .think__icon {
@@ -96,8 +96,8 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
 .think__ring {
   position: absolute;
   inset: -10px;
-  border-radius: 36px;
-  border: 1px solid rgba(108, 99, 255, 0.28);
+  border-radius: 8px;
+  border: 1px solid var(--brand-200);
   animation: think-pulse 2.2s ease-out infinite;
 }
 
@@ -112,7 +112,7 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
 }
 
 .think__sub {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: var(--fs-xs);
   letter-spacing: 0.02em;
   color: var(--text-3);
@@ -121,9 +121,9 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
 .think__steps {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: min(340px, 100%);
-  margin: 22px 0 18px;
+  margin: 24px 0 16px;
   padding: 0;
   list-style: none;
   text-align: left;
@@ -132,8 +132,8 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
 .think__step {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -162,7 +162,7 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
   border-radius: 50%;
   background: var(--surface-3);
   color: var(--teal-600);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   flex: none;
 }
@@ -203,7 +203,7 @@ const progress = computed(() => Math.round(((active.value + 1) / Math.max(1, pro
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #6c63ff, #12b3a6);
+  background: var(--brand-600);
   transition: width 0.6s var(--ease-out);
 }
 

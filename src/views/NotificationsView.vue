@@ -276,7 +276,7 @@ function linkLabel(link) {
 <template>
   <div class="page nt">
     <PageHeader
-      eyebrow="INBOX · 消息中心"
+      eyebrow="收件箱"
       title="消息通知中心"
       desc="申请审核、失物匹配、拼单进度与论坛回复，都收在这一处。点击消息可直接回到对应场景。"
     >
@@ -581,11 +581,33 @@ function linkLabel(link) {
 
 <style scoped>
 .nt {
-  gap: 20px;
+  gap: 16px;
 }
 
+/* 页头动作：范围切换降为安静的描边控件，只留「全部已读」一个实心高音量按钮；
+   两组之间用留白分组（20px > 组内 8px），避免再加一条会随换行悬空的竖线 */
 .nt-scope {
-  margin-right: 4px;
+  margin-right: 12px;
+}
+
+.nt-scope :deep(.el-radio-button__inner) {
+  border-color: var(--line) !important;
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 500;
+  box-shadow: none !important;
+}
+
+.nt-scope :deep(.el-radio-button:hover .el-radio-button__inner) {
+  border-color: var(--line-strong) !important;
+  color: var(--text-1);
+}
+
+.nt-scope :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: var(--brand-300) !important;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  box-shadow: none !important;
 }
 
 /* ---------- 状态 ---------- */
@@ -597,10 +619,10 @@ function linkLabel(link) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: center;
-  padding-top: 46px;
-  padding-bottom: 46px;
+  padding-top: 48px;
+  padding-bottom: 48px;
 }
 
 .nt-state__icon {
@@ -609,10 +631,10 @@ function linkLabel(link) {
   justify-content: center;
   width: 56px;
   height: 56px;
-  border-radius: 17px;
+  border-radius: 8px;
   background: var(--coral-50, #fff0ef);
   color: var(--coral-500);
-  font-size: 25px;
+  font-size: 24px;
   margin-bottom: 4px;
 }
 
@@ -623,7 +645,7 @@ function linkLabel(link) {
 }
 
 .nt-state p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   max-width: 460px;
   font-size: 13px;
   line-height: 1.7;
@@ -649,13 +671,13 @@ function linkLabel(link) {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .nt-chip__count {
-  margin-left: 5px;
+  margin-left: 4px;
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -667,7 +689,7 @@ function linkLabel(link) {
 .nt-main {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -683,7 +705,7 @@ function linkLabel(link) {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .nt-filter-head h3 {
@@ -702,11 +724,11 @@ function linkLabel(link) {
 .nt-filter {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 8px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-2);
   font-size: 13px;
@@ -723,10 +745,10 @@ function linkLabel(link) {
 }
 
 .nt-filter.is-active {
-  background: var(--brand-50, #f1f0ff);
-  border-color: rgba(108, 99, 255, 0.18);
-  color: var(--brand-600, #5a51f0);
-  font-weight: 650;
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-700);
+  font-weight: 600;
 }
 
 .nt-filter__icon {
@@ -735,10 +757,10 @@ function linkLabel(link) {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 15px;
+  font-size: 14px;
   transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
 }
 
@@ -754,38 +776,38 @@ function linkLabel(link) {
 .nt-filter__count {
   min-width: 22px;
   height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
+  padding: 0 4px;
+  border-radius: 4px;
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 20px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .nt-filter.is-active .nt-filter__count {
-  background: rgba(108, 99, 255, 0.12);
-  color: var(--brand-600, #5a51f0);
+  background: var(--brand-100);
+  color: var(--brand-700);
 }
 
 .nt-only-unread {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding-top: 2px;
+  gap: 8px;
+  padding-top: 0px;
 }
 
 .nt-only-unread strong {
   display: block;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
 .nt-only-unread p {
-  margin: 3px 0 0;
-  font-size: 11px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
@@ -798,8 +820,7 @@ function linkLabel(link) {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: linear-gradient(145deg, rgba(108, 99, 255, 0.06), rgba(18, 179, 166, 0.05)),
-    var(--surface);
+  background: var(--brand-50);
 }
 
 .nt-tip__icon {
@@ -809,21 +830,21 @@ function linkLabel(link) {
   flex: none;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--brand-500);
   box-shadow: var(--shadow-xs);
 }
 
 .nt-tip h4 {
-  margin: 1px 0 5px;
+  margin: 0px 0 4px;
   font-size: 13px;
   color: var(--text-1);
 }
 
 .nt-tip p {
   margin: 0 0 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
@@ -831,14 +852,14 @@ function linkLabel(link) {
 .nt-tip__link {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--brand-500);
 }
 
 .nt-tip__link:hover {
-  color: var(--brand-600, #5a51f0);
+  color: var(--brand-700);
 }
 
 /* ---------- 列表卡 ---------- */
@@ -851,9 +872,9 @@ function linkLabel(link) {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  background: var(--surface-2);
 }
 
 .nt-toolbar__title {
@@ -862,14 +883,15 @@ function linkLabel(link) {
 
 .nt-toolbar__title h2 {
   margin: 0 0 4px;
-  font-size: 15.5px;
-  font-weight: 720;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .nt-toolbar__title p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -890,22 +912,22 @@ function linkLabel(link) {
 }
 
 .nt-groups {
-  padding: 4px 20px 8px;
+  padding: 8px 24px 24px;
 }
 
 .nt-group {
-  padding-top: 14px;
+  padding-top: 12px;
 }
 
 .nt-group__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 2px 9px;
+  gap: 8px;
+  padding: 4px 0px 8px;
 }
 
 .nt-group__label {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-3);
@@ -918,14 +940,13 @@ function linkLabel(link) {
 }
 
 .nt-group__count {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
 .nt-group__list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 /* ---------- 单条消息 ---------- */
@@ -933,30 +954,28 @@ function linkLabel(link) {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 13px;
-  padding: 14px 16px 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
+  gap: 12px;
+  padding: 16px 8px 16px 24px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   outline: none;
-  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out),
-    transform var(--dur) var(--ease-out), background var(--dur) var(--ease-out);
+  transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
 }
 
 .nt-item:hover {
-  border-color: rgba(108, 99, 255, 0.24);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
+  background: var(--surface-2);
 }
 
 .nt-item:focus-visible {
-  border-color: var(--brand-400, #9d95ff);
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.16);
+  border-color: var(--brand-500);
+  box-shadow: none;
 }
 
 .nt-item.is-unread {
-  background: linear-gradient(92deg, rgba(108, 99, 255, 0.055), var(--surface) 38%);
+  background: transparent;
 }
 
 .nt-item__bar {
@@ -965,7 +984,7 @@ function linkLabel(link) {
   top: 15px;
   bottom: 15px;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 4px 4px 0;
   background: var(--brand-500);
   opacity: 0;
   transition: opacity var(--dur) var(--ease-out);
@@ -982,13 +1001,13 @@ function linkLabel(link) {
   flex: none;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 18px;
-  margin-top: 1px;
+  margin-top: 0px;
 }
 
 .nt-icon--brand {
-  background: var(--brand-50, #f1f0ff);
+  background: var(--brand-50, #eef2f5);
   color: var(--brand-500);
 }
 
@@ -1016,19 +1035,19 @@ function linkLabel(link) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px 8px;
 }
 
 .nt-item__title {
   margin: 0;
   font-size: 14px;
-  font-weight: 620;
+  font-weight: 600;
   line-height: 1.5;
   color: var(--text-1);
 }
 
 .nt-item.is-unread .nt-item__title {
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .nt-item.is-important .nt-item__title {
@@ -1037,13 +1056,13 @@ function linkLabel(link) {
 
 .nt-important {
   flex: none;
-  padding: 1px 7px;
+  padding: 0px 8px;
   border-radius: 999px;
   background: var(--coral-50, #fff0ef);
   border: 1px solid rgba(255, 107, 107, 0.22);
   color: var(--coral-600, #d64545);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 18px;
 }
 
@@ -1054,14 +1073,14 @@ function linkLabel(link) {
 .nt-item__time {
   margin-left: auto;
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
   font-variant-numeric: tabular-nums;
 }
 
 .nt-item__content {
-  margin: 5px 0 8px;
-  font-size: 12.5px;
+  margin: 4px 0 8px;
+  font-size: 12px;
   line-height: 1.65;
   color: var(--text-2);
 }
@@ -1070,14 +1089,14 @@ function linkLabel(link) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: 8px 8px;
 }
 
 .nt-item__link {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1088,13 +1107,13 @@ function linkLabel(link) {
 .nt-item__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0px;
   margin: -4px -6px -4px 0;
 }
 
 .nt-item__actions :deep(.el-button) {
-  font-size: 11.5px;
-  padding: 4px 7px;
+  font-size: 12px;
+  padding: 4px 8px;
   height: auto;
 }
 
@@ -1111,16 +1130,16 @@ function linkLabel(link) {
 }
 
 .nt-empty {
-  padding: 24px 20px 30px;
+  padding: 24px 16px 32px;
 }
 
 .nt-list-foot {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 14px 20px 16px;
-  border-top: 1px dashed var(--line);
-  font-size: 11px;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
@@ -1154,7 +1173,7 @@ function linkLabel(link) {
 
   .nt-toolbar__right {
     margin-left: 0;
-    gap: 10px;
+    gap: 8px;
   }
 
   .nt-search {
@@ -1163,11 +1182,11 @@ function linkLabel(link) {
   }
 
   .nt-groups {
-    padding: 2px 14px 6px;
+    padding: 0px 12px 4px;
   }
 
   .nt-list-foot {
-    padding: 13px 16px 15px;
+    padding: 12px 16px 16px;
   }
 }
 
@@ -1189,33 +1208,33 @@ function linkLabel(link) {
   }
 
   .nt-item {
-    gap: 11px;
-    padding: 13px 13px 13px 15px;
-    border-radius: 13px;
+    gap: 12px;
+    padding: 12px 12px 12px 16px;
+    border-radius: 8px;
   }
 
   .nt-icon {
     width: 34px;
     height: 34px;
-    border-radius: 10px;
-    font-size: 16px;
+    border-radius: 8px;
+    font-size: 18px;
   }
 
   .nt-item__title {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .nt-item__time {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .nt-item__content {
     font-size: 12px;
-    margin-bottom: 7px;
+    margin-bottom: 8px;
   }
 
   .nt-item__meta {
-    gap: 7px;
+    gap: 8px;
   }
 
   .nt-item__spacer {
@@ -1224,16 +1243,16 @@ function linkLabel(link) {
 
   .nt-item__actions {
     width: 100%;
-    margin: 2px 0 0;
+    margin: 0px 0 0;
     justify-content: flex-end;
   }
 
   .nt-item__actions :deep(.el-button) {
-    padding: 3px 6px;
+    padding: 4px 4px;
   }
 
   .nt-empty {
-    padding: 12px 10px 20px;
+    padding: 12px 8px 16px;
   }
 }
 </style>

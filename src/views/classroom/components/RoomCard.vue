@@ -3,11 +3,11 @@ import { computed } from 'vue'
 import { ArrowRight, Clock, Location, StarFilled } from '@element-plus/icons-vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { WEEK_CN } from '@/utils/format'
-import { roomFreeAt } from '@/utils/aiEngine'
 
 const props = defineProps({
   room: { type: Object, required: true },
   day: { type: Number, default: 3 },
+  date: { type: String, default: '' },
 })
 
 defineEmits(['open'])
@@ -16,21 +16,21 @@ const classroom = useClassroomStore()
 
 const toneClass = computed(() => `media-cover--${props.room.tone || 'brand'}`)
 const dayLabel = computed(() => WEEK_CN[Number(props.day) % 7])
-const dayBusy = computed(() =>
-  (props.room.busy || []).filter((b) => Number(b.day) === Number(props.day)),
-)
-const freeSlots = computed(() => classroom.freeSlotsOf(props.room, props.day))
-const freeState = computed(() => {
-  if (!dayBusy.value.length) return { text: '今日全天空闲', ok: true }
-  if (!freeSlots.value.length) return { text: '今日已排满', ok: false }
-  return { text: `今日 ${freeSlots.value.length} 段空闲`, ok: true }
-})
+const freeSlots = computed(() => classroom.freeSlotsOf(props.room, props.day, props.date))
 const slotStates = computed(() =>
   classroom.filters.slots.map((slot) => ({
     ...slot,
-    busy: !roomFreeAt(props.room, props.day, slot.start, slot.end),
+    busy: !classroom.roomFreeAt(props.room, props.day, slot.start, slot.end, props.date),
   })),
 )
+const freeState = computed(() => {
+  const busyCount = slotStates.value.filter((slot) => slot.busy).length
+  if (!busyCount && !freeSlots.value.length) {
+    return { text: '今日全天空闲', ok: true }
+  }
+  if (!freeSlots.value.length) return { text: '今日已排满', ok: false }
+  return { text: `今日 ${freeSlots.value.length} 段空闲`, ok: true }
+})
 </script>
 
 <template>
@@ -44,11 +44,13 @@ const slotStates = computed(() =>
     @keydown.space.prevent="$emit('open', room)"
   >
     <div class="room-card__art media-cover" :class="toneClass">
-      <span class="room-card__campus">{{ room.campus }} · {{ room.kind }}</span>
-      <span class="room-card__rating">
-        <el-icon :size="11"><StarFilled /></el-icon>
-        {{ room.rating }}
-      </span>
+      <div class="room-card__art-header">
+        <span class="room-card__campus">{{ room.campus }} · {{ room.kind }}</span>
+        <span class="room-card__rating">
+          <el-icon :size="11"><StarFilled /></el-icon>
+          {{ room.rating }}
+        </span>
+      </div>
       <div class="room-card__art-main">
         <span class="room-card__code">{{ room.code }}</span>
         <span class="room-card__place">
@@ -113,84 +115,91 @@ const slotStates = computed(() =>
 
 <style scoped>
 .room-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: stretch;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
-  transition:
-    transform 0.24s var(--ease-out),
-    box-shadow 0.24s var(--ease-out),
-    border-color 0.24s var(--ease-out);
+  transition: background var(--dur) var(--ease-out);
 }
 
 .room-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--brand-200);
-  box-shadow: var(--shadow-md);
+  background: var(--surface-2);
 }
 
 .room-card:focus-visible {
   outline: 2px solid var(--brand-300);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .room-card__art {
   position: relative;
-  display: block;
-  height: 124px;
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  height: auto;
+  min-height: 132px;
+  padding: 16px;
   border-radius: 0;
   flex: none;
 }
 
-.room-card__campus {
+.room-card__art-header {
   position: relative;
   z-index: 1;
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  height: 21px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 10.5px;
-  font-weight: 650;
+  justify-content: space-between;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.room-card__campus {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
   letter-spacing: 0.02em;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
 }
 
 .room-card__rating {
-  position: absolute;
-  z-index: 1;
-  top: 14px;
-  right: 14px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 21px;
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.62);
-  font-size: 11px;
-  font-weight: 750;
+  gap: 4px;
+  flex: none;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 
 .room-card__art-main {
-  position: absolute;
+  position: static;
   z-index: 1;
-  left: 14px;
-  right: 74px;
-  bottom: 13px;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
 .room-card__code {
-  font-size: 23px;
-  font-weight: 760;
-  line-height: 1.12;
-  letter-spacing: -0.035em;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0;
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
@@ -198,34 +207,26 @@ const slotStates = computed(() =>
 }
 
 .room-card__place {
-  margin-top: 3px;
-  font-size: 11px;
-  font-weight: 560;
-  color: var(--text-2);
-  opacity: 0.82;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .room-card__watermark {
-  position: absolute;
-  right: 2px;
-  bottom: -16px;
-  font-size: 68px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.07em;
-  color: rgba(17, 21, 39, 0.07);
-  pointer-events: none;
+  display: none;
 }
 
 .room-card__body {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 16px 14px;
+  gap: 8px;
+  padding: 16px 0 16px 24px;
+  min-width: 0;
 }
 
 .room-card__topline {
@@ -238,9 +239,9 @@ const slotStates = computed(() =>
 .room-card__state {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  font-weight: 650;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--teal-600);
 }
 
@@ -253,19 +254,19 @@ const slotStates = computed(() =>
   height: 6px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 3px rgba(18, 179, 166, 0.14);
+  box-shadow: none;
   flex: none;
 }
 
 .room-card__state.is-full .room-card__dot {
-  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.16);
+  box-shadow: none;
 }
 
 .room-card__distance {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 12px;
   color: var(--text-3);
   flex: none;
 }
@@ -277,8 +278,8 @@ const slotStates = computed(() =>
 
 .room-card__slot {
   flex: 1;
-  height: 5px;
-  border-radius: var(--radius-pill);
+  height: 4px;
+  border-radius: 0;
   background: var(--teal-100);
 }
 
@@ -290,34 +291,34 @@ const slotStates = computed(() =>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -5px;
-  font-size: 11px;
+  margin-top: -4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .room-card__class {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  margin: 2px 0 8px;
-  font-size: 11.5px;
+  margin: 0px 0 8px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .room-card__class-label {
   flex: none;
-  padding: 1px 5px;
-  border-radius: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
   background: var(--brand-50);
   color: var(--brand-700);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .room-card__foot {
@@ -326,9 +327,9 @@ const slotStates = computed(() =>
   justify-content: space-between;
   gap: 8px;
   margin-top: auto;
-  padding-top: 9px;
-  border-top: 1px dashed var(--line);
-  font-size: 11.5px;
+  padding-top: 0;
+  border-top: none;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -340,6 +341,41 @@ const slotStates = computed(() =>
 
 .room-card__link {
   color: var(--brand-600);
-  font-weight: 650;
+  font-weight: 600;
+}
+
+@media (max-width: 620px) {
+  .room-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-card__art {
+    min-height: 122px;
+  }
+
+  .room-card__body {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 430px) {
+  .room-card__art {
+    min-height: 112px;
+    padding: 14px;
+  }
+
+  .room-card__body {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .room-card__code {
+    font-size: 22px;
+  }
+
+  .room-card__topline,
+  .room-card__foot {
+    flex-wrap: wrap;
+  }
 }
 </style>

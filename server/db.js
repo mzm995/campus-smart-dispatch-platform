@@ -1081,6 +1081,778 @@ export function createDatabaseRepository(db) {
     }
   }
 
+  function mutateSharedDocument(resourceKey, userId, mutator) {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const row = db.prepare(`
+        SELECT resource_key, data_json, version
+        FROM shared_documents
+        WHERE resource_key = ?
+      `).get(resourceKey)
+      const fallbackData = ['groupbuy', 'lostfound', 'classroom', 'forum', 'dispatch'].includes(
+        resourceKey,
+      )
+        ? []
+        : {}
+      const data = (row ? parseJson(row.data_json, null) : null) ?? structuredClone(fallbackData)
+      const result = mutator(data, row ? Number(row.version) : 0)
+      const nextVersion = row ? Number(row.version) + 1 : 1
+      const updatedAt = nowIso()
+      if (row) {
+        db.prepare(`
+          UPDATE shared_documents
+          SET data_json = ?, version = ?, updated_at = ?, updated_by = ?
+          WHERE resource_key = ? AND version = ?
+        `).run(
+          JSON.stringify(data),
+          nextVersion,
+          updatedAt,
+          userId,
+          resourceKey,
+          Number(row.version),
+        )
+      } else {
+        db.prepare(`
+          INSERT INTO shared_documents(resource_key, data_json, version, updated_at, updated_by)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(resourceKey, JSON.stringify(data), nextVersion, updatedAt, userId)
+      }
+      db.exec('COMMIT')
+      return {
+        ...result,
+        resource: resourceKey,
+        data,
+        version: nextVersion,
+        updatedAt,
+      }
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  function serializeClassroomApplication(row) {
+    if (!row) return null
+    const weekday = new Date(`${row.application_date}T00:00:00Z`).getUTCDay()
+    return {
+      id: row.id,
+      roomId: row.room_id,
+      roomCode: row.room_code || '',
+      building: row.building || '',
+      campus: row.campus || '',
+      date: row.application_date,
+      day: weekday === 0 ? 7 : weekday,
+      start: row.start_time,
+      end: row.end_time,
+      purpose: row.purpose,
+      people: Number(row.people),
+      applicant: row.applicant_name,
+      applicantId: row.applicant_id,
+      contact: row.contact,
+      note: row.note,
+      status: row.status,
+      aiReason: row.ai_reason,
+      blockId: row.block_id,
+      blockStatus: row.block_status || '',
+      holdExpiresAt: row.hold_expires_at,
+      createdAt: row.created_at,
+      reviewedAt: row.reviewed_at,
+      reviewedBy: row.reviewer_id,
+      reviewNote: row.review_note,
+      version: Number(row.version),
+      timeline: parseJson(row.timeline_json, []),
+    }
+  }
+
+  function classroomApplicationSelect() {
+    return `
+      SELECT
+        a.*,
+        b.status AS block_status,
+        json_extract(b.metadata_json, '$.roomCode') AS room_code,
+        json_extract(b.metadata_json, '$.building') AS building,
+        json_extract(b.metadata_json, '$.campus') AS campus,
+        (
+          SELECT json_group_array(json_object(
+            'title', event.title,
+            'desc', event.desc,
+            'time', event.time,
+            'pending', json(CASE WHEN event.pending THEN 'true' ELSE 'false' END)
+          ))
+          FROM (
+            SELECT
+              '提交申请' AS title,
+              '服务端已完成时段冲突校验并建立临时占用' AS desc,
+              a.created_at AS time,
+              0 AS pending
+            UNION ALL
+            SELECT
+              '等待管理员审核' AS title,
+              '审核期间该时段对其他用户显示为占用' AS desc,
+              NULL AS time,
+              CASE WHEN a.status = 'pending' THEN 1 ELSE 0 END AS pending
+            UNION ALL
+            SELECT
+              CASE
+                WHEN a.status = 'approved' THEN '管理员审核通过'
+                WHEN a.status = 'rejected' THEN '管理员驳回'
+                WHEN a.status = 'cancelled' THEN '申请人取消'
+                WHEN a.status = 'expired' THEN '占用已过期'
+                ELSE '状态更新'
+              END AS title,
+              COALESCE(NULLIF(a.review_note, ''), '状态已更新') AS desc,
+              a.reviewed_at AS time,
+              0 AS pending
+            WHERE a.status != 'pending'
+          ) event
+          ORDER BY CASE WHEN event.time IS NULL THEN 1 ELSE 0 END, event.time
+        ) AS timeline_json
+      FROM classroom_applications a
+      LEFT JOIN room_blocks b
+        ON b.id = a.block_id
+    `
+  }
+
+  function expireClassroomHolds() {
+    const expired = db.prepare(`
+      SELECT id, block_id
+      FROM classroom_applications
+      WHERE status = 'pending' AND hold_expires_at <= ?
+    `).all(nowIso())
+    if (!expired.length) return 0
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const updateApplication = db.prepare(`
+        UPDATE classroom_applications
+        SET status = 'expired', reviewed_at = ?, version = version + 1
+        WHERE id = ? AND status = 'pending'
+      `)
+      const releaseBlock = db.prepare(`
+        UPDATE room_blocks
+        SET status = 'released', version = version + 1, updated_at = ?
+        WHERE id = ? AND status = 'tentative'
+      `)
+      const timestamp = nowIso()
+      for (const item of expired) {
+        updateApplication.run(timestamp, item.id)
+        releaseBlock.run(timestamp, item.block_id)
+      }
+      db.exec('COMMIT')
+      return expired.length
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  function listRoomBlocks(fromIso, toIso) {
+    return db.prepare(`
+      SELECT id, room_id, source_type, source_id, starts_at, ends_at,
+        status, metadata_json, version, created_at, updated_at
+      FROM room_blocks
+      WHERE status IN ('tentative', 'active')
+        AND starts_at < ?
+        AND ends_at > ?
+      ORDER BY starts_at ASC
+    `).all(toIso, fromIso).map((row) => ({
+      id: row.id,
+      roomId: row.room_id,
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      status: row.status,
+      metadata: parseJson(row.metadata_json, {}),
+      version: Number(row.version),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  }
+
+  function listClassroomApplications(actor) {
+    expireClassroomHolds()
+    const scope = actor.permissions?.scopes?.classroom || 'none'
+    const viewAll = scope === 'all'
+    const rows = viewAll
+      ? db.prepare(`
+          ${classroomApplicationSelect()}
+          ORDER BY a.created_at DESC
+        `).all()
+      : db.prepare(`
+          ${classroomApplicationSelect()}
+          WHERE a.applicant_id = ?
+          ORDER BY a.created_at DESC
+        `).all(actor.id)
+    return rows.map(serializeClassroomApplication)
+  }
+
+  function createClassroomApplication({
+    id,
+    room,
+    date,
+    day,
+    start,
+    end,
+    startsAt,
+    endsAt,
+    purpose,
+    people,
+    applicantId,
+    applicantName,
+    contact,
+    note,
+    aiReason,
+    blockId,
+    idempotencyKey,
+    holdExpiresAt,
+    initialStatus = 'pending',
+  }) {
+    const createdAt = nowIso()
+    const status = initialStatus === 'approved' ? 'approved' : 'pending'
+    const blockStatus = status === 'approved' ? 'active' : 'tentative'
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const existingRow = db.prepare(`
+        ${classroomApplicationSelect()}
+        WHERE a.id = ? OR (a.applicant_id = ? AND a.idempotency_key = ?)
+      `).get(id, applicantId, idempotencyKey)
+      if (existingRow) {
+        db.exec('COMMIT')
+        return {
+          existing: true,
+          application: serializeClassroomApplication(existingRow),
+        }
+      }
+      const conflict = db.prepare(`
+        SELECT b.*, a.id AS application_id
+        FROM room_blocks b
+        LEFT JOIN classroom_applications a
+          ON a.block_id = b.id
+        WHERE b.room_id = ?
+          AND b.status IN ('tentative', 'active')
+          AND b.starts_at < ?
+          AND b.ends_at > ?
+        ORDER BY b.starts_at ASC
+        LIMIT 1
+      `).get(room.id, endsAt, startsAt)
+      if (conflict) {
+        db.exec('ROLLBACK')
+        return {
+          conflict: true,
+          block: {
+            id: conflict.id,
+            roomId: conflict.room_id,
+            sourceType: conflict.source_type,
+            sourceId: conflict.source_id,
+            startsAt: conflict.starts_at,
+            endsAt: conflict.ends_at,
+            status: conflict.status,
+            metadata: parseJson(conflict.metadata_json, {}),
+          },
+        }
+      }
+      db.prepare(`
+        INSERT INTO room_blocks(
+          id, room_id, source_type, source_id, starts_at, ends_at,
+          status, metadata_json, version, created_at, updated_at
+        ) VALUES (?, ?, 'application', ?, ?, ?, ?, ?, 1, ?, ?)
+      `).run(
+        blockId,
+        room.id,
+        id,
+        startsAt,
+        endsAt,
+        blockStatus,
+        JSON.stringify({
+          roomCode: room.code,
+          building: room.building,
+          campus: room.campus,
+          applicantId,
+          applicantName,
+          purpose,
+        }),
+        createdAt,
+        createdAt,
+      )
+      db.prepare(`
+        INSERT INTO classroom_applications(
+          id, room_id, application_date, start_time, end_time, purpose,
+          people, applicant_id, applicant_name, contact, note, status,
+          ai_reason, block_id, idempotency_key, hold_expires_at, version,
+          created_at, reviewed_at, reviewer_id, review_note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '')
+      `).run(
+        id,
+        room.id,
+        date,
+        start,
+        end,
+        purpose,
+        people,
+        applicantId,
+        applicantName,
+        contact,
+        note,
+        status,
+        aiReason,
+        blockId,
+        idempotencyKey,
+        holdExpiresAt,
+        createdAt,
+        status === 'approved' ? createdAt : null,
+        status === 'approved' ? applicantId : null,
+      )
+      const row = db.prepare(`
+        ${classroomApplicationSelect()}
+        WHERE a.id = ?
+      `).get(id)
+      db.exec('COMMIT')
+      return {
+        conflict: false,
+        existing: false,
+        application: serializeClassroomApplication(row),
+      }
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  function closeClassroomApplication(id, actor, status, reviewNote = '', requireReview = false) {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const row = db.prepare(`
+        ${classroomApplicationSelect()}
+        WHERE a.id = ?
+      `).get(id)
+      if (!row) {
+        db.exec('ROLLBACK')
+        return { ok: false, code: 'NOT_FOUND' }
+      }
+      if (requireReview) {
+        if (row.status !== 'pending') {
+          db.exec('ROLLBACK')
+          return { ok: false, code: 'NOT_PENDING' }
+        }
+      } else {
+        const owns =
+          row.applicant_id === actor.id ||
+          actor.permissions?.scopes?.classroom === 'all'
+        if (!owns) {
+          db.exec('ROLLBACK')
+          return { ok: false, code: 'FORBIDDEN' }
+        }
+        if (!['pending', 'approved'].includes(row.status)) {
+          db.exec('ROLLBACK')
+          return { ok: false, code: 'NOT_ACTIVE' }
+        }
+        const endsAt = db.prepare(`
+          SELECT ends_at FROM room_blocks WHERE id = ?
+        `).get(row.block_id)?.ends_at
+        if (actor.permissions?.scopes?.classroom !== 'all' && endsAt && endsAt <= nowIso()) {
+          db.exec('ROLLBACK')
+          return { ok: false, code: 'ALREADY_ENDED' }
+        }
+      }
+      const timestamp = nowIso()
+      db.prepare(`
+        UPDATE classroom_applications
+        SET status = ?, reviewed_at = ?, reviewer_id = ?, review_note = ?,
+          version = version + 1
+        WHERE id = ?
+      `).run(status, timestamp, actor.id, String(reviewNote || '').slice(0, 500), id)
+      db.prepare(`
+        UPDATE room_blocks
+        SET status = ?, version = version + 1, updated_at = ?
+        WHERE id = ? AND status IN ('tentative', 'active')
+      `).run(status === 'approved' ? 'active' : 'released', timestamp, row.block_id)
+      const updated = db.prepare(`
+        ${classroomApplicationSelect()}
+        WHERE a.id = ?
+      `).get(id)
+      db.exec('COMMIT')
+      return { ok: true, application: serializeClassroomApplication(updated) }
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  function createLostfoundWatch({ id, userId, criteria, expiresAt }) {
+    const timestamp = nowIso()
+    db.prepare(`
+      INSERT INTO lostfound_watches(
+        id, user_id, criteria_json, status, expires_at, created_at, updated_at
+      ) VALUES (?, ?, ?, 'active', ?, ?, ?)
+    `).run(id, userId, JSON.stringify(criteria), expiresAt, timestamp, timestamp)
+    return getLostfoundWatch(id, userId)
+  }
+
+  function getLostfoundWatch(id, userId) {
+    const row = db.prepare(`
+      SELECT * FROM lostfound_watches WHERE id = ? AND user_id = ?
+    `).get(id, userId)
+    if (!row) return null
+    return {
+      id: row.id,
+      userId: row.user_id,
+      criteria: parseJson(row.criteria_json, {}),
+      status: row.status,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  function listLostfoundWatches(userId) {
+    db.prepare(`
+      UPDATE lostfound_watches
+      SET status = 'expired', updated_at = ?
+      WHERE user_id = ? AND status = 'active' AND expires_at <= ?
+    `).run(nowIso(), userId, nowIso())
+    return db.prepare(`
+      SELECT * FROM lostfound_watches
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).all(userId).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      criteria: parseJson(row.criteria_json, {}),
+      status: row.status,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  }
+
+  function listActiveLostfoundWatches() {
+    return db.prepare(`
+      SELECT * FROM lostfound_watches
+      WHERE status = 'active' AND expires_at > ?
+      ORDER BY created_at ASC
+    `).all(nowIso()).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      criteria: parseJson(row.criteria_json, {}),
+      status: row.status,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  }
+
+  function closeLostfoundWatch(id, userId) {
+    return db.prepare(`
+      UPDATE lostfound_watches
+      SET status = 'closed', updated_at = ?
+      WHERE id = ? AND user_id = ? AND status = 'active'
+    `).run(nowIso(), id, userId).changes > 0
+  }
+
+  function listGroupPaymentOrders(orderId) {
+    return db.prepare(`
+      SELECT * FROM group_payment_orders
+      WHERE order_id = ?
+      ORDER BY authorized_at ASC
+    `).all(orderId).map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      userId: row.user_id,
+      amountCents: Number(row.amount_cents),
+      status: row.status,
+      idempotencyKey: row.idempotency_key,
+      providerTxn: row.provider_txn,
+      authorizedAt: row.authorized_at,
+      capturedAt: row.captured_at,
+      refundedAt: row.refunded_at,
+      updatedAt: row.updated_at,
+    }))
+  }
+
+  function authorizeGroupPayment({
+    id,
+    orderId,
+    userId,
+    amountCents,
+    idempotencyKey,
+  }) {
+    const timestamp = nowIso()
+    db.prepare(`
+      INSERT OR IGNORE INTO group_payment_orders(
+        id, order_id, user_id, amount_cents, status, idempotency_key,
+        provider_txn, authorized_at, captured_at, refunded_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'authorized', ?, ?, ?, NULL, NULL, ?)
+    `).run(
+      id,
+      orderId,
+      userId,
+      Math.max(0, Math.round(Number(amountCents) || 0)),
+      idempotencyKey,
+      `demo_${randomUUID()}`,
+      timestamp,
+      timestamp,
+    )
+    return db.prepare(`
+      SELECT * FROM group_payment_orders
+      WHERE user_id = ? AND idempotency_key = ?
+    `).get(userId, idempotencyKey)
+  }
+
+  function captureGroupPayments(orderId) {
+    const timestamp = nowIso()
+    const rows = db.prepare(`
+      SELECT * FROM group_payment_orders
+      WHERE order_id = ? AND status = 'authorized'
+    `).all(orderId)
+    const update = db.prepare(`
+      UPDATE group_payment_orders
+      SET status = 'captured', captured_at = ?, updated_at = ?
+      WHERE id = ? AND status = 'authorized'
+    `)
+    for (const row of rows) update.run(timestamp, timestamp, row.id)
+    return rows.map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      userId: row.user_id,
+      amountCents: Number(row.amount_cents),
+      status: 'captured',
+      capturedAt: timestamp,
+    }))
+  }
+
+  function syncGroupPaymentTotal(orderId, userId, amountCents, idempotencyKey) {
+    const rows = db.prepare(`
+      SELECT * FROM group_payment_orders
+      WHERE order_id = ? AND user_id = ? AND status = 'authorized'
+      ORDER BY authorized_at ASC
+    `).all(orderId, userId)
+    const normalizedAmount = Math.max(0, Math.round(Number(amountCents) || 0))
+    const timestamp = nowIso()
+    if (!rows.length) {
+      db.prepare(`
+        INSERT INTO group_payment_orders(
+          id, order_id, user_id, amount_cents, status, idempotency_key,
+          provider_txn, authorized_at, captured_at, refunded_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'authorized', ?, ?, ?, NULL, NULL, ?)
+      `).run(
+        `pay_${randomUUID()}`,
+        orderId,
+        userId,
+        normalizedAmount,
+        idempotencyKey,
+        `demo_${randomUUID()}`,
+        timestamp,
+        timestamp,
+      )
+      return
+    }
+    db.prepare(`
+      UPDATE group_payment_orders
+      SET amount_cents = ?, updated_at = ?
+      WHERE id = ?
+    `).run(normalizedAmount, timestamp, rows[0].id)
+    for (const row of rows.slice(1)) {
+      db.prepare(`
+        UPDATE group_payment_orders
+        SET status = 'released', amount_cents = 0, refunded_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run(timestamp, timestamp, row.id)
+    }
+  }
+
+  function releaseGroupPaymentsForUser(orderId, userId) {
+    const timestamp = nowIso()
+    return db.prepare(`
+      UPDATE group_payment_orders
+      SET status = 'released', refunded_at = ?, updated_at = ?
+      WHERE order_id = ? AND user_id = ? AND status IN ('authorized', 'captured')
+    `).run(timestamp, timestamp, orderId, userId).changes
+  }
+
+  function releaseAllGroupPayments(orderId) {
+    const timestamp = nowIso()
+    return db.prepare(`
+      UPDATE group_payment_orders
+      SET status = 'released', refunded_at = ?, updated_at = ?
+      WHERE order_id = ? AND status IN ('authorized', 'captured')
+    `).run(timestamp, timestamp, orderId).changes
+  }
+
+  function addGroupLedgerEntry({
+    id,
+    orderId,
+    userId,
+    entryType,
+    amountCents,
+    idempotencyKey,
+    detail = {},
+  }) {
+    db.prepare(`
+      INSERT OR IGNORE INTO group_ledger_entries(
+        id, order_id, user_id, entry_type, amount_cents,
+        idempotency_key, detail_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      orderId,
+      userId || null,
+      String(entryType || 'adjustment').slice(0, 60),
+      Math.round(Number(amountCents) || 0),
+      idempotencyKey,
+      JSON.stringify(detail),
+      nowIso(),
+    )
+  }
+
+  function listGroupLedger(orderId) {
+    return db.prepare(`
+      SELECT * FROM group_ledger_entries
+      WHERE order_id = ?
+      ORDER BY created_at ASC
+    `).all(orderId).map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      userId: row.user_id,
+      entryType: row.entry_type,
+      amountCents: Number(row.amount_cents),
+      detail: parseJson(row.detail_json, {}),
+      createdAt: row.created_at,
+    }))
+  }
+
+  function ensureGroupPickupTickets(orderId, participantUserIds) {
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO group_pickup_tickets(
+        id, order_id, user_id, status, created_at, redeemed_at, redeemed_by
+      ) VALUES (?, ?, ?, 'pending', ?, NULL, NULL)
+    `)
+    const timestamp = nowIso()
+    for (const userId of [...new Set(participantUserIds.filter(Boolean))]) {
+      insert.run(`pick_${randomUUID()}`, orderId, userId, timestamp)
+    }
+    return listGroupPickupTickets(orderId)
+  }
+
+  function listGroupPickupTickets(orderId) {
+    return db.prepare(`
+      SELECT t.*, u.name AS user_name
+      FROM group_pickup_tickets t
+      JOIN users u ON u.id = t.user_id
+      WHERE t.order_id = ?
+      ORDER BY t.created_at ASC
+    `).all(orderId).map((row) => ({
+      id: row.id,
+      orderId: row.order_id,
+      userId: row.user_id,
+      userName: row.user_name,
+      status: row.status,
+      createdAt: row.created_at,
+      redeemedAt: row.redeemed_at,
+      redeemedBy: row.redeemed_by,
+    }))
+  }
+
+  function redeemGroupPickupTicket(orderId, userId, actorId) {
+    const timestamp = nowIso()
+    const result = db.prepare(`
+      UPDATE group_pickup_tickets
+      SET status = 'redeemed', redeemed_at = ?, redeemed_by = ?
+      WHERE order_id = ? AND user_id = ? AND status = 'pending'
+    `).run(timestamp, actorId, orderId, userId)
+    return result.changes > 0
+  }
+
+  function expireGroupPickupTickets(orderId) {
+    return db.prepare(`
+      UPDATE group_pickup_tickets
+      SET status = 'expired'
+      WHERE order_id = ? AND status = 'pending'
+    `).run(orderId).changes
+  }
+
+  function getOpenGroupDispute(orderId) {
+    const row = db.prepare(`
+      SELECT * FROM group_disputes
+      WHERE order_id = ? AND status = 'open'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(orderId)
+    if (!row) return null
+    return {
+      id: row.id,
+      orderId: row.order_id,
+      openedBy: row.opened_by,
+      reason: row.reason,
+      status: row.status,
+      resolution: row.resolution,
+      createdAt: row.created_at,
+      resolvedAt: row.resolved_at,
+      resolvedBy: row.resolved_by,
+    }
+  }
+
+  function createGroupDispute({ id, orderId, userId, reason }) {
+    db.prepare(`
+      INSERT INTO group_disputes(
+        id, order_id, opened_by, reason, status, resolution, created_at, resolved_at, resolved_by
+      ) VALUES (?, ?, ?, ?, 'open', '', ?, NULL, NULL)
+    `).run(id, orderId, userId, String(reason || '').slice(0, 1000), nowIso())
+    return getOpenGroupDispute(orderId)
+  }
+
+  function resolveGroupDispute(id, actorId, resolution, accepted) {
+    const timestamp = nowIso()
+    return db.prepare(`
+      UPDATE group_disputes
+      SET status = ?, resolution = ?, resolved_at = ?, resolved_by = ?
+      WHERE id = ? AND status = 'open'
+    `).run(
+      accepted ? 'resolved' : 'rejected',
+      String(resolution || '').slice(0, 1000),
+      timestamp,
+      actorId,
+      id,
+    ).changes > 0
+  }
+
+  function getGroupActionReceipt(idempotencyKey, userId) {
+    const row = db.prepare(`
+      SELECT * FROM group_action_receipts
+      WHERE idempotency_key = ? AND user_id = ?
+    `).get(idempotencyKey, userId)
+    if (!row) return null
+    return {
+      idempotencyKey: row.idempotency_key,
+      orderId: row.order_id,
+      userId: row.user_id,
+      action: row.action,
+      result: parseJson(row.result_json, {}),
+      createdAt: row.created_at,
+    }
+  }
+
+  function saveGroupActionReceipt({
+    idempotencyKey,
+    orderId,
+    userId,
+    action,
+    result = {},
+  }) {
+    db.prepare(`
+      INSERT OR IGNORE INTO group_action_receipts(
+        idempotency_key, order_id, user_id, action, result_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      idempotencyKey,
+      orderId,
+      userId,
+      action,
+      JSON.stringify(result),
+      nowIso(),
+    )
+    return getGroupActionReceipt(idempotencyKey, userId)
+  }
+
   function getAiProviderSetting(provider = 'deepseek') {
     return db.prepare(`
       SELECT
@@ -1434,6 +2206,14 @@ export function createDatabaseRepository(db) {
       const notifications = db.prepare('DELETE FROM notifications').run().changes
       const aiUsage = db.prepare('DELETE FROM ai_usage_logs').run().changes
       const auditLogs = db.prepare('DELETE FROM audit_logs').run().changes
+      db.prepare('DELETE FROM classroom_applications').run()
+      db.prepare('DELETE FROM room_blocks').run()
+      db.prepare('DELETE FROM lostfound_watches').run()
+      db.prepare('DELETE FROM group_payment_orders').run()
+      db.prepare('DELETE FROM group_ledger_entries').run()
+      db.prepare('DELETE FROM group_pickup_tickets').run()
+      db.prepare('DELETE FROM group_disputes').run()
+      db.prepare('DELETE FROM group_action_receipts').run()
       db.exec('COMMIT')
       seedDatabase(db, { forceDemo: true })
       return {
@@ -1484,6 +2264,34 @@ export function createDatabaseRepository(db) {
     getSharedDocument,
     listSharedDocumentMetadata,
     saveSharedDocument,
+    mutateSharedDocument,
+    listRoomBlocks,
+    listClassroomApplications,
+    createClassroomApplication,
+    closeClassroomApplication,
+    expireClassroomHolds,
+    createLostfoundWatch,
+    getLostfoundWatch,
+    listLostfoundWatches,
+    listActiveLostfoundWatches,
+    closeLostfoundWatch,
+    listGroupPaymentOrders,
+    authorizeGroupPayment,
+    captureGroupPayments,
+    syncGroupPaymentTotal,
+    releaseGroupPaymentsForUser,
+    releaseAllGroupPayments,
+    addGroupLedgerEntry,
+    listGroupLedger,
+    ensureGroupPickupTickets,
+    listGroupPickupTickets,
+    redeemGroupPickupTicket,
+    expireGroupPickupTickets,
+    getOpenGroupDispute,
+    createGroupDispute,
+    resolveGroupDispute,
+    getGroupActionReceipt,
+    saveGroupActionReceipt,
     getAiProviderSetting,
     saveAiProviderSetting,
     updateAiProviderTest,

@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <section class="card sec" :class="{ 'card--pad': padded && !flush }">
+  <section class="sec" :class="{ 'sec--flush': flush }">
     <div v-if="title || $slots.actions || $slots.title" class="sec__head">
       <div class="sec__title-wrap">
         <h3 v-if="$slots.title" class="sec__title">
@@ -27,30 +27,39 @@ defineProps({
 
 <style scoped>
 .sec {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.sec--flush {
+  padding-top: 0;
+  border-top: none;
 }
 
 .sec__head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
 .sec__title {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   margin: 0;
   font-size: var(--fs-lg);
-  font-weight: 680;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-1);
 }
 
 .sec__desc {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--text-3);

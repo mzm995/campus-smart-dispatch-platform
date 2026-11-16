@@ -18,7 +18,7 @@ const meta = computed(() => SCENE_META[props.scene] || SCENE_META.classroom)
 <template>
   <button type="button" class="scene-tile" :class="[`scene-tile--${meta.tone}`, { 'is-active': active, 'scene-tile--compact': compact }]">
     <div class="scene-tile__top">
-      <SceneIcon :scene="scene" :size="compact ? 34 : 42" />
+      <SceneIcon :scene="scene" :size="compact ? 30 : 34" />
       <span class="scene-tile__arrow"><el-icon><ArrowRight /></el-icon></span>
     </div>
     <div class="scene-tile__name">{{ meta.name }}</div>
@@ -34,98 +34,74 @@ const meta = computed(() => SCENE_META[props.scene] || SCENE_META.classroom)
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  padding: 16px;
+  padding: 24px 0 16px;
   text-align: left;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   font-family: inherit;
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), border-color var(--dur);
-  overflow: hidden;
+  transition: border-color var(--dur) var(--ease-out);
 }
 
-.scene-tile::before {
+.scene-tile::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, var(--brand-50), transparent 60%);
+  inset: -1px 0 0;
+  border-top: 1px solid var(--text-1);
   opacity: 0;
-  transition: opacity var(--dur);
+  transition: opacity var(--dur) var(--ease-out);
   pointer-events: none;
 }
 
-.scene-tile:hover,
-.scene-tile.is-active {
-  transform: translateY(-3px);
-  border-color: var(--brand-200);
-  box-shadow: var(--shadow-md);
-}
-
-.scene-tile:hover::before,
-.scene-tile.is-active::before {
+.scene-tile:hover::after,
+.scene-tile.is-active::after {
   opacity: 1;
 }
 
-.scene-tile--teal::before {
-  background: linear-gradient(135deg, var(--teal-50), transparent 60%);
-}
-
-.scene-tile--amber::before {
-  background: linear-gradient(135deg, var(--amber-50), transparent 60%);
-}
-
-.scene-tile--coral::before {
-  background: linear-gradient(135deg, var(--coral-50), transparent 60%);
-}
-
-.scene-tile.is-active {
-  border-color: var(--brand-400);
+.scene-tile:focus-visible {
+  outline: 2px solid var(--brand-400);
+  outline-offset: 2px;
 }
 
 .scene-tile__top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  position: relative;
-  z-index: 1;
+  gap: 8px;
 }
 
 .scene-tile__arrow {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--surface-3);
-  color: var(--text-3);
-  font-size: 12px;
-  transition: all var(--dur) var(--ease-out);
+  width: 24px;
+  height: 24px;
+  color: var(--text-4);
+  font-size: var(--fs-xs);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 .scene-tile:hover .scene-tile__arrow {
-  background: var(--brand-500);
-  color: #fff;
+  color: var(--brand-600);
   transform: translateX(2px);
 }
 
 .scene-tile__name {
-  position: relative;
-  z-index: 1;
-  font-size: var(--fs-md);
-  font-weight: 700;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
   color: var(--text-1);
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 .scene-tile__desc {
-  position: relative;
-  z-index: 1;
   margin: 0;
-  font-size: var(--fs-xs);
-  line-height: 1.55;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -135,28 +111,16 @@ const meta = computed(() => SCENE_META[props.scene] || SCENE_META.classroom)
 }
 
 .scene-tile__stat {
-  position: relative;
-  z-index: 1;
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 650;
-  color: var(--brand-600);
-}
-
-.scene-tile--teal .scene-tile__stat {
-  color: var(--teal-600);
-}
-
-.scene-tile--amber .scene-tile__stat {
-  color: var(--amber-600);
-}
-
-.scene-tile--coral .scene-tile__stat {
-  color: var(--coral-600);
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
 }
 
 .scene-tile--compact {
-  padding: 13px;
+  padding: 16px 0 8px;
 }
 
 .scene-tile--compact .scene-tile__desc {

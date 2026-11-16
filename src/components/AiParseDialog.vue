@@ -441,21 +441,22 @@ function confirm() {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 13px;
-  color: #fff;
-  background: linear-gradient(135deg, #6c63ff, #8f7bff 60%, #12b3a6);
-  box-shadow: 0 10px 22px -12px rgba(108, 99, 255, 0.95);
+  border-radius: var(--radius-sm);
+  color: var(--text-invert);
+  background: var(--brand-600);
+  box-shadow: none;
 }
 
 .ai-head__title {
-  font-size: var(--fs-lg);
-  font-weight: 720;
-  letter-spacing: -0.01em;
+  font-family: var(--font-serif);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .ai-head__sub {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
@@ -466,7 +467,7 @@ function confirm() {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text-3);
@@ -483,11 +484,11 @@ function confirm() {
 .ai-body {
   max-height: min(68vh, 640px);
   overflow-y: auto;
-  padding: 2px 2px 0;
+  padding: 0px 0px 0;
 }
 
 .ai-input :deep(.el-textarea__inner) {
-  padding: 14px 16px;
+  padding: 12px 16px;
   font-size: var(--fs-md);
   line-height: 1.7;
   border-radius: var(--radius);
@@ -503,9 +504,9 @@ function confirm() {
 }
 
 .ai-examples__label {
-  margin-bottom: 9px;
+  margin-bottom: 8px;
   font-size: var(--fs-xs);
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text-3);
 }
@@ -521,13 +522,13 @@ function confirm() {
   align-items: flex-start;
   gap: 8px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 12px;
   text-align: left;
   font-family: inherit;
   font-size: var(--fs-sm);
   line-height: 1.55;
   color: var(--text-2);
-  border: 1px dashed var(--line-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface);
   cursor: pointer;
@@ -552,7 +553,7 @@ function confirm() {
   align-items: flex-start;
   gap: 8px;
   margin-top: 16px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text-3);
@@ -561,14 +562,14 @@ function confirm() {
 }
 
 .ai-note .el-icon {
-  margin-top: 2px;
+  margin-top: 0px;
   flex: none;
   color: var(--brand-500);
 }
 
 .ai-error {
   margin-top: 12px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   background: var(--coral-50);
   color: var(--coral-600);
@@ -578,9 +579,9 @@ function confirm() {
 .ai-foot {
   position: sticky;
   bottom: 0;
-  margin-top: 20px;
-  padding: 14px 0 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 30%);
+  margin-top: 16px;
+  padding: 12px 0 0px;
+  background: linear-gradient(180deg, rgba(255, 253, 250, 0), var(--surface) 30%);
 }
 
 .ai-foot__hint {
@@ -592,7 +593,7 @@ function confirm() {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
 }
 
@@ -604,8 +605,8 @@ function confirm() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   border-radius: var(--radius-lg);
   background: var(--grad-brand-soft);
 }
@@ -621,13 +622,13 @@ function confirm() {
   align-items: center;
   gap: 8px;
   font-size: var(--fs-md);
-  font-weight: 720;
+  font-weight: 700;
   color: var(--text-1);
 }
 
 .ai-result-head__meta {
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -644,8 +645,8 @@ function confirm() {
 }
 
 .ai-conf__value {
-  font-size: 19px;
-  font-weight: 760;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.1;
   color: var(--teal-600);
   font-variant-numeric: tabular-nums;
@@ -660,19 +661,19 @@ function confirm() {
 }
 
 .ai-conf__value small {
-  font-size: 10px;
-  margin-left: 1px;
+  font-size: 12px;
+  margin-left: 0px;
 }
 
 .ai-conf__label {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: 0px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .ai-summary {
-  margin-top: 14px;
-  padding: 12px 14px;
+  margin-top: 12px;
+  padding: 12px 12px;
   border-left: 3px solid var(--brand-400);
   border-radius: 4px var(--radius) var(--radius) 4px;
   background: var(--surface-2);
@@ -684,32 +685,32 @@ function confirm() {
 .ai-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 14px;
+  gap: 12px 12px;
   margin-top: 16px;
 }
 
 .ai-field__label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 4px;
+  margin-bottom: 4px;
   font-size: var(--fs-xs);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 
 .ai-field__req {
-  padding: 0 5px;
+  padding: 0 4px;
   border-radius: 4px;
   background: var(--brand-50);
   color: var(--brand-600);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .ai-field :deep(.is-missing .el-input__wrapper) {
   box-shadow: 0 0 0 1px var(--coral-100) inset;
-  background: #fffafa;
+  background: var(--surface-2);
 }
 
 .ai-field :deep(.el-input__wrapper) {
@@ -717,8 +718,8 @@ function confirm() {
 }
 
 .ai-alert {
-  margin-top: 14px;
-  padding: 10px 12px;
+  margin-top: 12px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   font-size: var(--fs-xs);
   line-height: 1.65;
@@ -750,21 +751,21 @@ function confirm() {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
   font-size: var(--fs-xs);
   line-height: 1.65;
   color: var(--text-3);
 }
 
 .ai-hint-line .dot {
-  margin-top: 7px;
+  margin-top: 8px;
 }
 
 .ai-unknown {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 18px 0 6px;
+  padding: 16px 0 4px;
   text-align: center;
 }
 
@@ -775,7 +776,7 @@ function confirm() {
   width: 56px;
   height: 56px;
   margin-bottom: 12px;
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--grad-brand-soft);
   color: var(--brand-500);
 }
@@ -783,7 +784,7 @@ function confirm() {
 .ai-unknown__title {
   max-width: 440px;
   font-size: var(--fs-md);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.6;
   color: var(--text-1);
 }
@@ -799,7 +800,7 @@ function confirm() {
 .ai-unknown__grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -825,8 +826,8 @@ function confirm() {
 <style>
 .ai-dialog.el-dialog {
   border-radius: var(--radius-xl);
-  padding: 22px 24px 18px;
-  box-shadow: var(--shadow-lg);
+  padding: 24px 24px 16px;
+  box-shadow: var(--shadow-overlay);
 }
 
 .ai-dialog .el-dialog__header {
@@ -845,7 +846,7 @@ function confirm() {
 @media (max-width: 640px) {
   .ai-dialog.el-dialog {
     border-radius: var(--radius-lg);
-    padding: 18px 16px 14px;
+    padding: 16px 16px 12px;
   }
 }
 </style>

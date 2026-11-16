@@ -304,7 +304,7 @@ watch(
 <template>
   <div class="page forum-page">
     <PageHeader
-      eyebrow="SCENE 04 · 同频讨论"
+      eyebrow="场景 04 · 同频讨论"
       title="校园论坛"
       desc="发帖求助、分享讨论，AI 帮你想标题、找同频帖。"
     >
@@ -506,7 +506,7 @@ watch(
 
       <aside class="forum-side">
         <SectionCard title="本周热帖" desc="按点赞与回复热度排序">
-          <template #actions><span class="tag-soft tag-soft--amber">TOP 5</span></template>
+          <template #actions><span class="tag-soft">TOP 5</span></template>
           <button
             v-for="(item, index) in forum.hotPosts"
             :key="item.id"
@@ -553,7 +553,6 @@ watch(
         </SectionCard>
 
         <div class="card card--gradient ai-guide">
-          <span class="ai-guide__glow" aria-hidden="true"></span>
           <div class="ai-guide__head">
             <span class="ai-guide__orb" aria-hidden="true"><el-icon><MagicStick /></el-icon></span>
             <div class="ai-guide__headtext">
@@ -805,7 +804,7 @@ watch(
 .forum-meta {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -823,8 +822,9 @@ watch(
 .forum-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 13px;
-  padding: 17px 18px;
+  gap: 16px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line-strong);
 }
 
 .forum-toolbar__cats {
@@ -834,14 +834,14 @@ watch(
 }
 
 .forum-toolbar__cats .chip-row {
-  gap: 7px;
+  gap: 8px;
 }
 
 .filter-label {
   flex: none;
-  padding-top: 5px;
+  padding-top: 4px;
   font-size: var(--fs-xs);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-3);
 }
 
@@ -851,11 +851,11 @@ watch(
   justify-content: center;
   min-width: 18px;
   height: 17px;
-  padding: 0 5px;
-  border-radius: 999px;
+  padding: 0 4px;
+  border-radius: 4px;
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -871,7 +871,7 @@ watch(
   gap: 12px;
   flex-wrap: wrap;
   padding-top: 12px;
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .forum-search {
@@ -892,9 +892,9 @@ watch(
 .forum-toolbar__foot {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
@@ -921,37 +921,38 @@ watch(
 .forum-feed {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
   min-width: 0;
 }
 
 .forum-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
+  border-top: 1px solid var(--line);
 }
 
 .post-card {
-  overflow: hidden;
-  padding: 18px 20px 14px 24px;
+  padding: 24px 8px 24px 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .post-card::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 16px;
-  bottom: 16px;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: linear-gradient(180deg, var(--brand-500), var(--teal-500));
-  opacity: 0.9;
+  left: -8px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  border-radius: 0;
+  background: var(--brand-500);
+  opacity: 0;
 }
 
 .post-card__top {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 12px;
 }
 
 .avatar {
@@ -976,9 +977,9 @@ watch(
 .post-card__name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 
@@ -986,11 +987,11 @@ watch(
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
+  padding: 0 4px;
+  border-radius: 4px;
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   flex: none;
 }
@@ -1003,9 +1004,9 @@ watch(
 .post-card__sub {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-  font-size: 11.5px;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1017,18 +1018,19 @@ watch(
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
   flex: none;
   max-width: 48%;
   flex-wrap: wrap;
 }
 
 .post-card__title {
-  margin: 11px 0 0;
-  font-size: 15.5px;
-  font-weight: 680;
+  margin: 12px 0 0;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-1);
   transition: color var(--dur) var(--ease-out);
 }
@@ -1038,7 +1040,7 @@ watch(
 }
 
 .post-card__desc {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: var(--fs-sm);
   line-height: 1.75;
   color: var(--text-2);
@@ -1047,18 +1049,18 @@ watch(
 .post-card__tags {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .post-card__foot {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-top: 13px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
@@ -1066,7 +1068,7 @@ watch(
 .like-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   border: none;
   background: none;
   padding: 0;
@@ -1096,22 +1098,22 @@ watch(
 .post-card__more {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   margin-left: auto;
   color: var(--brand-600);
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .forum-empty {
-  padding: 10px;
+  padding: 8px;
 }
 
 /* ---------- 右侧栏 ---------- */
 .forum-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
   align-self: start;
 }
@@ -1119,11 +1121,11 @@ watch(
 .hot-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 0;
+  padding: 8px 0;
   border: none;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   cursor: pointer;
@@ -1152,7 +1154,7 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .hot-row__title {
@@ -1168,13 +1170,13 @@ watch(
 }
 
 .hot-row__meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .hot-row__arrow {
   flex: none;
-  margin-top: 2px;
+  margin-top: 0px;
   font-size: 12px;
   color: var(--text-4);
 }
@@ -1182,11 +1184,11 @@ watch(
 .help-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
-  padding: 9px 0;
+  padding: 8px 0;
   border: none;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   cursor: pointer;
@@ -1209,7 +1211,7 @@ watch(
 }
 
 .help-row__meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1221,27 +1223,17 @@ watch(
 .ai-guide {
   position: relative;
   overflow: hidden;
-  padding: 18px;
+  padding: 16px;
   border-color: var(--brand-100);
-  background: linear-gradient(155deg, var(--brand-50) 0%, var(--surface-2) 48%, var(--teal-50) 100%);
+  background: var(--brand-50);
 }
 
-.ai-guide__glow {
-  position: absolute;
-  top: -78px;
-  right: -58px;
-  width: 178px;
-  height: 178px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(108, 99, 255, 0.26), transparent 68%);
-  pointer-events: none;
-}
 
 .ai-guide__head {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 12px;
 }
 
 .ai-guide__orb {
@@ -1251,11 +1243,11 @@ watch(
   flex: none;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, var(--brand-500), var(--brand-600) 58%, var(--teal-600) 130%);
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
   font-size: 18px;
-  box-shadow: 0 10px 20px -12px rgba(108, 99, 255, 0.9);
+  box-shadow: none;
 }
 
 .ai-guide__headtext {
@@ -1266,13 +1258,13 @@ watch(
 .ai-guide__title {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   margin: 0;
   font-size: var(--fs-lg);
-  font-weight: 720;
+  font-weight: 700;
   line-height: 1.35;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
@@ -1288,10 +1280,10 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
-  padding: 5px 5px 5px 12px;
+  margin-top: 12px;
+  padding: 4px 4px 4px 12px;
   border: 1px solid var(--brand-100);
-  border-radius: 13px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow-sm);
   transition:
@@ -1301,9 +1293,7 @@ watch(
 
 .ai-guide__composer:focus-within {
   border-color: var(--brand-300);
-  box-shadow:
-    0 0 0 3px rgba(108, 99, 255, 0.12),
-    var(--shadow-sm);
+  box-shadow: 0 0 0 3px var(--brand-50);
 }
 
 .ai-guide__input {
@@ -1330,11 +1320,11 @@ watch(
 .ai-guide__btn {
   flex: none;
   height: 34px;
-  padding: 0 13px;
-  border-radius: 9px;
+  padding: 0 12px;
+  border-radius: 8px;
   font-size: var(--fs-xs);
-  font-weight: 650;
-  box-shadow: 0 6px 14px -8px rgba(108, 99, 255, 0.75);
+  font-weight: 600;
+  box-shadow: none;
 }
 
 .ai-guide__btn :deep(.el-icon) {
@@ -1344,7 +1334,7 @@ watch(
 .ai-guide__list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
@@ -1353,7 +1343,7 @@ watch(
 .ai-guide__list li {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   font-size: var(--fs-xs);
   line-height: 1.55;
   color: var(--text-2);
@@ -1361,7 +1351,7 @@ watch(
 
 .ai-guide__list li .el-icon {
   flex: none;
-  margin-top: 1px;
+  margin-top: 0px;
   color: var(--brand-600);
   font-size: 13px;
 }
@@ -1369,11 +1359,11 @@ watch(
 .ai-guide__note {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px dashed var(--brand-200);
-  font-size: 11.5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--brand-200);
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-2);
 }
@@ -1390,7 +1380,7 @@ watch(
 }
 
 .rules-card :deep(.sec__desc) {
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--text-2);
 }
 
@@ -1405,7 +1395,7 @@ watch(
 .rule-list li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 0;
 }
 
@@ -1418,7 +1408,7 @@ watch(
 }
 
 .rule-list li + li {
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .rule-no {
@@ -1428,24 +1418,24 @@ watch(
   flex: none;
   width: 22px;
   height: 22px;
-  margin-top: 1px;
-  border-radius: 7px;
+  margin-top: 0px;
+  border-radius: 8px;
   background: var(--brand-50);
   color: var(--brand-600);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .rule-list b {
   display: block;
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.45;
   color: var(--text-1);
 }
 
 .rule-list p {
-  margin: 2px 0 0;
+  margin: 0px 0 0;
   font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--text-2);
@@ -1455,12 +1445,12 @@ watch(
 .rule-foot {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   margin-top: 12px;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   background: var(--teal-50);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-2);
   text-wrap: pretty;
@@ -1468,7 +1458,7 @@ watch(
 
 .rule-foot .el-icon {
   flex: none;
-  margin-top: 2px;
+  margin-top: 0px;
   color: var(--teal-600);
   font-size: 13px;
 }
@@ -1477,8 +1467,8 @@ watch(
 .pub-head h3 {
   margin: 0;
   font-size: var(--fs-xl);
-  font-weight: 720;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
@@ -1490,7 +1480,7 @@ watch(
 
 .forum-notice {
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .forum-notice p {
@@ -1503,24 +1493,24 @@ watch(
   flex: none;
   border: none;
   background: none;
-  padding: 0 2px;
+  padding: 0 0px;
   color: var(--text-3);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
 .draft-panel {
-  padding: 15px 16px;
+  padding: 16px 16px;
   border: 1px solid var(--brand-100);
   border-radius: var(--radius);
-  background: linear-gradient(135deg, var(--brand-50), var(--surface) 72%);
+  background: var(--brand-50);
 }
 
 .draft-panel__head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .draft-panel__icon {
@@ -1530,10 +1520,10 @@ watch(
   width: 34px;
   height: 34px;
   flex: none;
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--brand-500);
   color: #fff;
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .draft-panel__title {
@@ -1547,8 +1537,8 @@ watch(
 }
 
 .draft-panel__desc {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -1565,7 +1555,7 @@ watch(
 }
 
 .draft-loading {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .draft-loading :deep(.think) {
@@ -1573,17 +1563,17 @@ watch(
 }
 
 .similar-list {
-  margin-top: 13px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--brand-200);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--brand-200);
 }
 
 .similar-list__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 3px;
+  gap: 8px;
+  margin-bottom: 4px;
   font-size: var(--fs-xs);
 }
 
@@ -1595,9 +1585,9 @@ watch(
 .similar-item__row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 0;
+  padding: 8px 0;
   border: none;
   background: none;
   text-align: left;
@@ -1605,28 +1595,28 @@ watch(
 }
 
 .similar-item + .similar-item .similar-item__row {
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .similar-item__score {
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
-  gap: 1px;
+  gap: 0px;
   width: 42px;
   height: 42px;
   flex: none;
-  padding-top: 11px;
+  padding-top: 12px;
   border: 1px solid var(--brand-200);
   border-radius: 50%;
   background: var(--surface);
   color: var(--brand-600);
   font-size: 13px;
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .similar-item__score i {
-  font-size: 8px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 600;
   color: var(--text-3);
@@ -1654,29 +1644,29 @@ watch(
 
 .similar-item__reasons .tag-soft {
   height: 19px;
-  padding: 0 7px;
-  font-size: 11px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
 .similar-item__meta {
   flex: none;
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .similar-item__preview {
-  margin: 0 0 9px 52px;
-  padding: 9px 11px;
+  margin: 0 0 8px 48px;
+  padding: 8px 12px;
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.72);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-2);
 }
 
 .similar-item__preview p {
-  margin: 0 0 3px;
+  margin: 0 0 4px;
 }
 
 .post-form {
@@ -1684,18 +1674,18 @@ watch(
 }
 
 .post-form :deep(.el-form-item) {
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .post-form :deep(.el-form-item__label) {
-  padding-bottom: 6px;
+  padding-bottom: 4px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 
 .tag-picker {
-  gap: 7px;
+  gap: 8px;
 }
 
 .dialog-foot {
@@ -1735,7 +1725,7 @@ watch(
     top: 90px;
     max-height: calc(100vh - 112px);
     overflow-y: auto;
-    padding-right: 3px;
+    padding-right: 4px;
   }
 
   .forum-side::-webkit-scrollbar {
@@ -1778,7 +1768,7 @@ watch(
   }
 
   .ai-guide {
-    padding: 15px;
+    padding: 16px;
   }
 
   .forum-head-actions {
@@ -1790,7 +1780,7 @@ watch(
   }
 
   .forum-toolbar {
-    padding: 14px;
+    padding: 12px;
   }
 
   .forum-toolbar__cats {
@@ -1831,7 +1821,7 @@ watch(
   }
 
   .post-card {
-    padding: 15px 15px 12px 19px;
+    padding: 16px 16px 12px 16px;
   }
 
   .post-card__top {
@@ -1846,11 +1836,11 @@ watch(
     width: 100%;
     max-width: none;
     justify-content: flex-start;
-    padding-left: 49px;
+    padding-left: 48px;
   }
 
   .post-card__title {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .post-card__foot {
@@ -1872,7 +1862,7 @@ watch(
   }
 
   .draft-panel {
-    padding: 13px;
+    padding: 12px;
   }
 
   .draft-panel__row {

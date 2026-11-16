@@ -11,13 +11,13 @@ import '@/styles/utilities.css'
 
 import App from './App.vue'
 import router from './router'
-import { installDemoApi } from '@/utils/demoApi'
 import { useUserStore } from '@/stores/user'
 import { useNotifyStore } from '@/stores/notify'
 import { useClassroomStore } from '@/stores/classroom'
 import { useLostfoundStore } from '@/stores/lostfound'
 import { useGroupBuyStore } from '@/stores/groupbuy'
 import { useForumStore } from '@/stores/forum'
+import { installDemoApi } from '@/utils/demoApi'
 
 // 静态托管（GitHub Pages 等）没有 Node 后端：先安装浏览器内的演示 API，
 // 让登录、通知、共享数据与系统配置接口照常返回，再由业务 store 接管。

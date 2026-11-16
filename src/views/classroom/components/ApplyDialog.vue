@@ -14,7 +14,6 @@ import AiBadge from '@/components/AiBadge.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useUserStore } from '@/stores/user'
 import { WEEK_CN, nextDate } from '@/utils/format'
-import { roomFreeAt, sleep } from '@/utils/aiEngine'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -35,6 +34,7 @@ const visible = computed({
 
 const formRef = ref(null)
 const submitting = ref(false)
+const requestKey = ref('')
 
 const form = reactive({
   date: '',
@@ -74,7 +74,24 @@ const dayLabel = computed(() => (selectedDay.value ? WEEK_CN[selectedDay.value %
 
 const conflict = computed(() => {
   if (!props.room || !form.date || !selectedDay.value) return false
-  return !roomFreeAt(props.room, selectedDay.value, form.start, form.end)
+  return !classroom.roomFreeAt(
+    props.room,
+    selectedDay.value,
+    form.start,
+    form.end,
+    form.date,
+  )
+})
+
+const conflictBlock = computed(() => {
+  if (!props.room || !form.date) return null
+  return classroom.blockAt(
+    props.room,
+    selectedDay.value,
+    form.start,
+    form.end,
+    form.date,
+  )
 })
 
 const aiReason = computed(() => {
@@ -83,12 +100,13 @@ const aiReason = computed(() => {
   const capText = props.room.capacity ? `容量 ${props.room.capacity} 人 ≥ ${crowd}` : '该场地容量待核'
   return `${capText}，配备${props.room.equipment.join('、')}，${
     dayLabel.value
-  } ${form.start}–${form.end} ${conflict.value ? '课表存在冲突，需人工复核' : '时段空闲'}，距 A 栋约 ${
+  } ${form.start}–${form.end} ${conflict.value ? '时段已被占用' : '时段空闲'}，距 A 栋约 ${
     props.room.distance
   }m。`
 })
 
 function resetForm() {
+  requestKey.value = ''
   const preset = props.prefill || {}
   const fallbackDay = Number(preset.day) || Number(classroom.criteria.day) || 3
   const safeDay = fallbackDay >= 1 && fallbackDay <= 7 ? fallbackDay : 3
@@ -146,31 +164,42 @@ async function submit() {
     ElMessage.warning(`该场地最多容纳 ${props.room.capacity} 人，请调整人数`)
     return
   }
-
-  submitting.value = true
-  await sleep(700)
-  const application = classroom.apply({
-    roomId: props.room.id,
-    date: form.date,
-    day: selectedDay.value,
-    start: form.start,
-    end: form.end,
-    purpose: form.purpose,
-    people: Number(form.people),
-    contact: '站内联系',
-    note: form.note,
-    aiReason: aiReason.value,
-  })
-  submitting.value = false
-
-  if (!application) {
-    ElMessage.error('申请提交失败，请稍后重试')
+  if (conflict.value) {
+    ElMessage.warning('该时段已被课程或借用申请占用，请更换时段')
     return
   }
-  visible.value = false
-  ElMessage.success('申请已提交，等待管理员审核')
-  emit('submitted', application)
-  router.push(`/classroom/status/${application.id}`)
+
+  submitting.value = true
+  requestKey.value ||=
+    globalThis.crypto?.randomUUID?.() || `classroom-${Date.now()}-${Math.random()}`
+  try {
+    const application = await classroom.apply({
+      roomId: props.room.id,
+      date: form.date,
+      day: selectedDay.value,
+      start: form.start,
+      end: form.end,
+      purpose: form.purpose,
+      people: Number(form.people),
+      contact: '站内联系',
+      note: form.note,
+      aiReason: aiReason.value,
+      idempotencyKey: requestKey.value,
+    })
+    requestKey.value = ''
+    visible.value = false
+    ElMessage.success('申请已提交并建立临时占用，等待管理员审核')
+    emit('submitted', application)
+    router.push(`/classroom/status/${application.id}`)
+  } catch (error) {
+    if (error?.code === 'ROOM_TIME_CONFLICT') {
+      requestKey.value = ''
+      await classroom.refreshAvailability({ quiet: true })
+    }
+    ElMessage.error(error?.message || '申请提交失败，请稍后重试')
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -284,7 +313,10 @@ async function submit() {
       </div>
       <div v-else-if="conflict" class="notice notice--amber ad-ai__warn">
         <el-icon :size="14"><Warning /></el-icon>
-        <span>课表显示该时段已有课程安排，提交后管理员会人工复核，建议更换时段或场地。</span>
+        <span>
+          该时段已被{{ conflictBlock?.sourceType === 'application' ? '其他借用申请' : '课程或维护安排' }}占用，
+          请更换时段或场地。
+        </span>
       </div>
       <p v-else class="ad-ai__ok">
         <el-icon :size="13"><CircleCheck /></el-icon>
@@ -301,7 +333,12 @@ async function submit() {
         <span class="ad-foot__hint">提交后进入管理员审核，预计 2 小时内完成</span>
         <div class="ad-foot__actions">
           <el-button :disabled="submitting" @click="visible = false">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="submit">
+          <el-button
+            type="primary"
+            :loading="submitting"
+            :disabled="conflict"
+            @click="submit"
+          >
             {{ submitting ? 'AI 核验中…' : '提交申请' }}
           </el-button>
         </div>
@@ -324,10 +361,10 @@ async function submit() {
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
-  box-shadow: 0 10px 20px -12px rgba(108, 99, 255, 0.9);
+  box-shadow: none;
 }
 
 .ad-head__text {
@@ -340,8 +377,8 @@ async function submit() {
   align-items: center;
   gap: 8px;
   font-size: var(--fs-lg);
-  font-weight: 720;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
@@ -349,18 +386,18 @@ async function submit() {
   display: inline-flex;
   align-items: center;
   height: 22px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
   background: var(--brand-50);
   color: var(--brand-600);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .ad-head__sub {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -372,7 +409,7 @@ async function submit() {
 .ad-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 14px;
+  gap: 0 12px;
 }
 
 .ad-form :deep(.el-form-item) {
@@ -380,7 +417,7 @@ async function submit() {
 }
 
 .ad-form :deep(.el-form-item__label) {
-  padding-bottom: 6px;
+  padding-bottom: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
@@ -409,8 +446,8 @@ async function submit() {
 .ad-presets {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 .ad-presets .chip {
@@ -418,48 +455,48 @@ async function submit() {
 }
 
 .ad-ai {
-  padding: 14px;
-  border: 1px dashed var(--brand-200);
+  padding: 12px;
+  border: 1px solid var(--brand-200);
   border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(238, 236, 255, 0.7), rgba(230, 250, 247, 0.6));
+  background: var(--brand-50);
 }
 
 .ad-ai__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .ad-ai__label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 650;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--brand-700);
   letter-spacing: 0.02em;
 }
 
 .ad-ai__text {
   margin: 8px 0 0;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-2);
 }
 
 .ad-ai__warn {
-  margin-top: 9px;
-  padding: 9px 11px;
-  font-size: 11.5px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
 }
 
 .ad-ai__ok {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin: 8px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--teal-600);
 }
@@ -467,11 +504,11 @@ async function submit() {
 .ad-ai__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px dashed rgba(108, 99, 255, 0.2);
-  font-size: 10.5px;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -489,7 +526,7 @@ async function submit() {
 }
 
 .ad-foot__hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -507,7 +544,7 @@ async function submit() {
   .ad-foot {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
   }
 
   .ad-foot__hint {

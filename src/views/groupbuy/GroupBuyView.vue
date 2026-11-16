@@ -102,6 +102,9 @@ const form = reactive({
   targetCount: 6,
   deadline: null,
   pickup: 'A栋一楼大厅',
+  settlementMode: 'escrow',
+  deliveryMode: 'central',
+  deliveryFee: 0,
   note: '',
   title: '',
   myCount: 1,
@@ -156,7 +159,10 @@ function memberCount(item) {
 }
 
 function myCountOf(item) {
-  const found = (item.participants || []).find((p) => p.name === me.value)
+  const found = (item.participants || []).find(
+    (participant) =>
+      participant.userId === user.user?.id || participant.name === me.value,
+  )
   return found ? Number(found.count) || 1 : 0
 }
 
@@ -225,6 +231,9 @@ function openCreate(prefill) {
     targetCount: 6,
     deadline: defaultDeadline(),
     pickup: 'A栋一楼大厅',
+    settlementMode: 'escrow',
+    deliveryMode: 'central',
+    deliveryFee: 0,
     note: '',
     title: '',
     myCount: 1,
@@ -265,15 +274,19 @@ async function actJoin(item) {
     return
   }
   actingId.value = item.id
-  await new Promise((resolve) => setTimeout(resolve, 260))
-  const result = groupbuy.join(item.id, 1)
-  actingId.value = ''
-  if (!result.ok) {
-    ElMessage.warning(result.message)
-    return
+  try {
+    await groupbuy.join(item.id, 1)
+    const current = groupbuy.getById(item.id) || item
+    if (groupbuy.commerceStatusOf(current) === 'funded') {
+      ElMessage.success('接龙成功，拼单已满员并完成资金托管')
+    } else {
+      ElMessage.success(`接龙成功，还差 ${groupbuy.remainingOf(current)} 份成团`)
+    }
+  } catch (error) {
+    ElMessage.warning(error?.message || '接龙失败，请刷新后重试')
+  } finally {
+    actingId.value = ''
   }
-  if (groupbuy.statusOf(item) === 'success') ElMessage.success('接龙成功，已满员成团！')
-  else ElMessage.success(`接龙成功，还差 ${groupbuy.remainingOf(item)} 份成团`)
 }
 
 async function actLeave(item) {
@@ -281,11 +294,15 @@ async function actLeave(item) {
   const mineCount = myCountOf(item)
   if (!mineCount) return
   actingId.value = item.id
-  await new Promise((resolve) => setTimeout(resolve, 220))
-  groupbuy.leave(item.id)
-  actingId.value = ''
-  if (mineCount > 1) ElMessage.success(`已取消 1 份，你还有 ${mineCount - 1} 份`)
-  else ElMessage.success('已取消接龙')
+  try {
+    await groupbuy.leave(item.id, 1)
+    if (mineCount > 1) ElMessage.success(`已取消 1 份，你还有 ${mineCount - 1} 份`)
+    else ElMessage.success('已取消接龙，预授权金额已释放')
+  } catch (error) {
+    ElMessage.warning(error?.message || '取消接龙失败')
+  } finally {
+    actingId.value = ''
+  }
 }
 
 async function submitCreate() {
@@ -299,15 +316,23 @@ async function submitCreate() {
     ElMessage.warning('请填写跑腿任务说明')
     return
   }
-  const created = await groupbuy.create({
-    ...form,
-    title: `${form.product.trim()}拼单，一起更划算`,
-    tone: TONE_BY_CATEGORY[form.category] || 'brand',
-    myCount: 1,
-  })
-  createOpen.value = false
-  ElMessage.success('拼单已发布，去邀请同学接龙吧')
-  if (created?.id) router.push(`/groupbuy/${created.id}`)
+  try {
+    const created = await groupbuy.create({
+      ...form,
+      title: `${form.product.trim()}拼单，一起更划算`,
+      tone: TONE_BY_CATEGORY[form.category] || 'brand',
+      myCount: 1,
+    })
+    createOpen.value = false
+    ElMessage.success(
+      form.settlementMode === 'host_advance'
+        ? '拼单已发布，成团后由发起人代付采购并完成分账'
+        : '拼单已发布，预计份额已冻结，成团后自动转入托管',
+    )
+    if (created?.id) router.push(`/groupbuy/${created.id}`)
+  } catch (error) {
+    ElMessage.error(error?.message || '创建拼单失败')
+  }
 }
 
 function openDetail(item) {
@@ -373,7 +398,7 @@ watch(() => route.query, handleQuery, { immediate: true })
 <template>
   <div class="page buy-page">
     <PageHeader
-      eyebrow="SCENE 03 · 成团进度"
+      eyebrow="场景 03 · 成团进度"
       title="拼单集市"
       desc="发起拼单、接龙凑份数，成团自动提醒，到点一起取货。"
     >
@@ -499,7 +524,10 @@ watch(() => route.query, handleQuery, { immediate: true })
           </span>
           <div class="buy-card__heading">
             <div class="buy-card__tags">
-              <StatusPill :status="groupbuy.statusOf(item)" />
+              <StatusPill
+                :status="groupbuy.statusOf(item)"
+                :text="groupbuy.commerceTextOf(item)"
+              />
               <span class="tag-soft" :class="categoryToneClass(item.category)">{{ item.category }}</span>
               <span v-if="groupbuy.isOwner(item)" class="tag-soft tag-soft--brand">我发起的</span>
               <span v-else-if="groupbuy.isJoined(item)" class="tag-soft tag-soft--teal">我参与的</span>
@@ -585,7 +613,7 @@ watch(() => route.query, handleQuery, { immediate: true })
             <el-button text size="small" @click="openDetail(item)">详情</el-button>
             <template v-if="groupbuy.statusOf(item) !== 'ongoing'">
               <el-button size="small" round disabled>
-                {{ groupbuy.statusOf(item) === 'success' ? '已成团' : '已结束' }}
+                {{ groupbuy.commerceTextOf(item) }}
               </el-button>
             </template>
             <template v-else-if="groupbuy.isJoined(item)">
@@ -727,6 +755,44 @@ watch(() => route.query, handleQuery, { immediate: true })
           <el-input v-model="form.pickup" maxlength="40" placeholder="例如：A栋一楼大厅" />
         </el-form-item>
 
+        <div class="form-grid">
+          <el-form-item label="履约方式">
+            <el-select v-model="form.deliveryMode" style="width: 100%">
+              <el-option label="集中送到楼栋大厅" value="central" />
+              <el-option label="宿舍楼下分批配送" value="dorm" />
+              <el-option label="商家 / 驿站自取" value="self" />
+              <el-option label="指定中间人分发" value="proxy" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="结算方式">
+            <el-select v-model="form.settlementMode" style="width: 100%">
+              <el-option label="成员预付托管（推荐）" value="escrow" />
+              <el-option label="发起人代付后分账" value="host_advance" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="配送费（全单）">
+            <el-input-number
+              v-model="form.deliveryFee"
+              :min="0"
+              :max="500"
+              :precision="2"
+              :step="1"
+              controls-position="right"
+            />
+          </el-form-item>
+        </div>
+
+        <div class="notice notice--teal escrow-notice">
+          <el-icon><Coin /></el-icon>
+          <span>
+            {{
+              form.settlementMode === 'host_advance'
+                ? '发起人先代付采购，成团后成员款项进入托管，全部领取完成后再向发起人分账；发生争议时资金冻结。'
+                : '接龙时冻结预计份额，成团后扣款进入平台托管；未成团自动释放，完成领取后再结算。'
+            }}
+          </span>
+        </div>
+
         <el-form-item label="备注" prop="note">
           <el-input
             v-model="form.note"
@@ -786,795 +852,4 @@ watch(() => route.query, handleQuery, { immediate: true })
   </div>
 </template>
 
-<style scoped>
-.buy-page {
-  gap: 20px;
-}
-
-.head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.head-actions :deep(.el-icon) {
-  margin-right: 5px;
-}
-
-.meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.meta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  color: var(--text-3);
-  font-size: 11.5px;
-  font-weight: 550;
-}
-
-.meta-pill .el-icon {
-  font-size: 13px;
-  color: var(--text-4);
-}
-
-.ai-notice {
-  align-items: center;
-}
-
-.ai-notice__icon {
-  font-size: 16px;
-  flex: none;
-}
-
-.ai-notice__title {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.ai-notice__text {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.6;
-  opacity: 0.9;
-}
-
-.ai-notice__close {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--brand-600);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.ai-notice__close:hover {
-  background: var(--brand-100);
-}
-
-.buy-stats {
-  gap: 14px;
-}
-
-/* ---------- 筛选 ---------- */
-.filter-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
-}
-
-.filter-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-search {
-  width: 100%;
-  max-width: 360px;
-}
-
-.filter-scope {
-  flex-wrap: nowrap;
-}
-
-.filter-count {
-  margin-left: auto;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.filter-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.filter-label {
-  flex: none;
-  width: 34px;
-  padding-top: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-3);
-}
-
-.reset-link {
-  margin-left: auto;
-  padding: 6px 2px;
-  border: none;
-  background: none;
-  color: var(--brand-600);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.reset-link:hover {
-  color: var(--brand-700);
-}
-
-/* ---------- 卡片网格 ---------- */
-.buy-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  align-items: stretch;
-}
-
-.buy-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  overflow: hidden;
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out);
-}
-
-.buy-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--brand-500), transparent 72%);
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease-out);
-}
-
-.buy-card--teal::before {
-  background: linear-gradient(90deg, var(--teal-500), transparent 72%);
-}
-
-.buy-card--amber::before {
-  background: linear-gradient(90deg, var(--amber-500), transparent 72%);
-}
-
-.buy-card--coral::before {
-  background: linear-gradient(90deg, var(--coral-500), transparent 72%);
-}
-
-.buy-card--slate::before {
-  background: linear-gradient(90deg, var(--line-strong), transparent 72%);
-}
-
-.buy-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--brand-200);
-}
-
-.buy-card:hover::before {
-  opacity: 1;
-}
-
-.buy-card__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.buy-card__art {
-  width: 54px;
-  height: 54px;
-  flex: none;
-  border-radius: 16px;
-  font-size: 22px;
-  font-weight: 760;
-  letter-spacing: -0.02em;
-}
-
-.buy-card__heading {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.buy-card__tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.buy-card__tags .tag-soft {
-  height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
-}
-
-.buy-card__title {
-  font-size: 14.5px;
-  font-weight: 680;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  color: var(--text-1);
-  min-height: 42px;
-}
-
-.buy-card__summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 2px;
-}
-
-.buy-card__price {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.price {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 1px;
-  color: var(--text-1);
-  font-size: 26px;
-  font-weight: 760;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.price small {
-  margin-right: 1px;
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-
-.price em {
-  margin-left: 4px;
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 550;
-  color: var(--text-3);
-  letter-spacing: 0;
-}
-
-.buy-card__target {
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.buy-bar {
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  overflow: hidden;
-}
-
-.buy-bar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, var(--brand-500), #948cff);
-  transition: width var(--dur-slow) var(--ease-out);
-}
-
-.buy-card--teal .buy-bar i {
-  background: linear-gradient(90deg, var(--teal-500), #4fdccf);
-}
-
-.buy-card--amber .buy-bar i {
-  background: linear-gradient(90deg, var(--amber-500), #ffc766);
-}
-
-.buy-card--coral .buy-bar i {
-  background: linear-gradient(90deg, var(--coral-500), #ff9f9f);
-}
-
-.buy-card--slate .buy-bar i {
-  background: linear-gradient(90deg, #98a2bd, #c3cade);
-}
-
-.buy-card__progress {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.buy-card__pmeta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.buy-card__pmeta strong {
-  color: var(--text-2);
-  font-weight: 700;
-}
-
-.buy-card__left {
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.buy-card__left.is-live {
-  color: var(--amber-600);
-}
-
-.buy-card__left.is-success {
-  color: var(--teal-600);
-}
-
-.buy-card__left.is-closed {
-  color: var(--text-3);
-}
-
-.buy-card__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 2px;
-}
-
-.meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.meta-item .el-icon {
-  flex: none;
-  font-size: 13px;
-  color: var(--text-4);
-}
-
-.buy-card__meta-split {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.errand-strip {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 10px;
-  border: 1px solid rgba(245, 166, 35, 0.2);
-  border-radius: 11px;
-  background: linear-gradient(135deg, rgba(245, 166, 35, 0.09), rgba(255, 255, 255, 0.78));
-}
-
-.errand-strip.is-settled {
-  border-color: rgba(18, 179, 166, 0.18);
-  background: rgba(18, 179, 166, 0.06);
-}
-
-.errand-strip.is-cancelled {
-  border-color: var(--line);
-  background: var(--surface-2);
-}
-
-.errand-strip__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 9px;
-  color: var(--amber-600);
-  background: var(--surface);
-  font-size: 14px;
-}
-
-.errand-strip__main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.errand-strip__main strong {
-  font-size: 10.5px;
-  color: var(--text-1);
-}
-
-.errand-strip__main span {
-  overflow: hidden;
-  font-size: 9.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-3);
-}
-
-.errand-strip__status {
-  flex: none;
-  font-size: 9.5px;
-  font-weight: 650;
-  color: var(--amber-600);
-}
-
-.errand-strip.is-settled .errand-strip__status {
-  color: var(--teal-600);
-}
-
-.buy-card__foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 11px;
-  margin-top: auto;
-  border-top: 1px dashed var(--line);
-}
-
-.buy-card__people {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.buy-card__people-text {
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.buy-card__actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.buy-card__actions :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-
-.buy-card__actions :deep(.el-button.is-round) {
-  font-size: 12px;
-  padding-left: 13px;
-  padding-right: 13px;
-}
-
-.buy-card.is-closed .buy-card__art {
-  filter: grayscale(0.5);
-  opacity: 0.78;
-}
-
-.buy-card.is-closed .buy-card__title,
-.buy-card.is-closed .price {
-  color: var(--text-2);
-}
-
-.empty-wrap {
-  grid-column: 1 / -1;
-  padding: 8px;
-}
-
-/* ---------- 玩法 ---------- */
-.flow-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.flow-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  padding: 14px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-}
-
-.flow-step__num {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: var(--brand-50);
-  color: var(--brand-600);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.flow-step__title {
-  font-size: 13px;
-  font-weight: 680;
-  color: var(--text-1);
-}
-
-.flow-step__desc {
-  margin-top: 3px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-/* ---------- 发起弹窗 ---------- */
-.form-note {
-  margin-bottom: 16px;
-}
-
-.form-note strong {
-  font-size: 12.5px;
-}
-
-.form-note p {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.6;
-  opacity: 0.9;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 14px;
-}
-
-.errand-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(245, 166, 35, 0.22);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(245, 166, 35, 0.08), rgba(255, 255, 255, 0.86));
-}
-
-.errand-editor__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.errand-editor__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  flex: none;
-  border-radius: 11px;
-  color: var(--amber-600);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
-}
-
-.errand-editor__head > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.errand-editor__head b {
-  display: block;
-  font-size: 12.5px;
-  color: var(--text-1);
-}
-
-.errand-editor__head p {
-  margin: 2px 0 0;
-  font-size: 10px;
-  line-height: 1.5;
-  color: var(--text-3);
-}
-
-.errand-editor :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.errand-editor__amount {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.errand-editor__amount :deep(.el-input-number) {
-  width: 126px;
-}
-
-.errand-editor__hint {
-  font-size: 9.5px;
-  font-weight: 400;
-  color: var(--text-3);
-}
-
-.dialog-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.dialog-foot :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-
-:global(.buy-dialog) {
-  max-width: calc(100vw - 28px);
-  border-radius: var(--radius-xl);
-}
-
-:global(.buy-dialog .el-dialog__header) {
-  padding-bottom: 6px;
-}
-
-@media (max-width: 1180px) {
-  .buy-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1000px) {
-  .flow-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 900px) {
-  .filter-search {
-    max-width: none;
-    flex: 1 1 220px;
-  }
-
-  .filter-count {
-    margin-left: 0;
-  }
-}
-
-@media (max-width: 760px) {
-  .buy-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .buy-card__title {
-    min-height: 0;
-  }
-}
-
-@media (max-width: 640px) {
-  .buy-page {
-    gap: 16px;
-  }
-
-  .head-actions {
-    width: 100%;
-  }
-
-  .head-actions :deep(.el-button) {
-    flex: 1;
-    margin-left: 0;
-  }
-
-  .meta-row {
-    gap: 6px;
-  }
-
-  .filter-card {
-    padding: 14px;
-  }
-
-  .filter-top {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .filter-search {
-    flex: none;
-    max-width: none;
-  }
-
-  .filter-scope {
-    flex-wrap: wrap;
-  }
-
-  .filter-count {
-    display: none;
-  }
-
-  .filter-row {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .filter-label {
-    width: 100%;
-    padding-top: 0;
-  }
-
-  .reset-link {
-    margin-left: 0;
-  }
-
-  .buy-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .buy-card {
-    padding: 14px;
-  }
-
-  .buy-card__title {
-    min-height: 0;
-  }
-
-  .flow-grid,
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .errand-editor__head {
-    flex-wrap: wrap;
-  }
-
-  .errand-editor__head :deep(.el-switch) {
-    width: 100%;
-  }
-
-  .errand-editor__amount :deep(.el-input-number) {
-    width: 100%;
-  }
-
-  .dialog-foot {
-    width: 100%;
-  }
-
-  .dialog-foot :deep(.el-button) {
-    flex: 1;
-  }
-}
-</style>
+<style scoped src="./GroupBuyView.css"></style>

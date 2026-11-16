@@ -66,10 +66,6 @@ function askAi() {
 <template>
   <div class="page nf">
     <section class="nf-hero">
-      <div class="nf-grid" aria-hidden="true"></div>
-      <div class="nf-orb nf-orb--a" aria-hidden="true"></div>
-      <div class="nf-orb nf-orb--b" aria-hidden="true"></div>
-
       <div class="nf-inner">
         <div class="nf-eyebrow">
           <span class="dot dot--brand dot--pulse"></span>
@@ -148,124 +144,81 @@ function askAi() {
 
 <style scoped>
 .nf {
-  gap: 18px;
+  gap: 32px;
 }
 
-/* ---------- 品牌 404 hero ---------- */
+/* ---------- 404：以字号与留白承担版面 ---------- */
 .nf-hero {
   position: relative;
-  overflow: hidden;
-  border-radius: 26px;
-  padding: 58px 56px 42px;
-  color: #fff;
-  background:
-    radial-gradient(900px 520px at 82% 12%, rgba(124, 108, 255, 0.42), transparent 62%),
-    radial-gradient(700px 500px at 6% 100%, rgba(18, 179, 166, 0.22), transparent 60%),
-    linear-gradient(145deg, #2c2866 0%, #191c3c 52%, #0e1023 100%);
-  box-shadow: var(--shadow-lg);
-  isolation: isolate;
-}
-
-.nf-grid {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(circle at 62% 36%, #000 18%, transparent 76%);
-  -webkit-mask-image: radial-gradient(circle at 62% 36%, #000 18%, transparent 76%);
-}
-
-.nf-orb {
-  position: absolute;
-  z-index: -1;
-  border-radius: 50%;
-  filter: blur(2px);
-  pointer-events: none;
-}
-
-.nf-orb--a {
-  width: 300px;
-  height: 300px;
-  right: -70px;
-  top: -90px;
-  background: radial-gradient(circle at 34% 34%, rgba(255, 255, 255, 0.5), rgba(124, 108, 255, 0.1) 45%, transparent 68%);
-  opacity: 0.55;
-}
-
-.nf-orb--b {
-  width: 200px;
-  height: 200px;
-  left: 42%;
-  bottom: -120px;
-  background: radial-gradient(circle, rgba(18, 179, 166, 0.5), transparent 68%);
-  opacity: 0.4;
+  overflow: visible;
+  padding: 32px 0 32px;
+  border-bottom: 1px solid var(--line-strong);
+  border-radius: 0;
+  color: var(--text-1);
+  background: transparent;
+  isolation: auto;
 }
 
 .nf-inner {
   position: relative;
-  max-width: 660px;
+  max-width: 600px;
 }
 
 .nf-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.72);
+  gap: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
 }
 
 .nf-code {
-  margin: 14px 0 4px;
-  font-size: clamp(104px, 17vw, 196px);
-  font-weight: 850;
-  line-height: 0.84;
-  letter-spacing: -0.07em;
-  background: linear-gradient(118deg, #ffffff 6%, #d9d3ff 42%, #7d70ff 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 18px 44px rgba(108, 99, 255, 0.35));
+  margin: 24px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(80px, 11vw, 128px);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--brand-600);
   user-select: none;
 }
 
 .nf-title {
-  margin: 18px 0 10px;
-  font-size: clamp(26px, 3.4vw, 38px);
-  line-height: 1.18;
-  letter-spacing: -0.02em;
-  font-weight: 770;
-  color: #fff;
+  margin: 16px 0 8px;
+  font-family: var(--font-serif);
+  font-size: var(--fs-3xl);
+  line-height: 1.3;
+  letter-spacing: 0;
+  font-weight: 600;
+  color: var(--text-1);
 }
 
 .nf-desc {
   margin: 0;
-  max-width: 520px;
-  font-size: 14.5px;
-  line-height: 1.9;
-  color: rgba(255, 255, 255, 0.64);
+  max-width: 56ch;
+  font-size: var(--fs-base);
+  line-height: 1.8;
+  color: var(--text-2);
 }
 
 .nf-path {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 100%;
-  margin-top: 22px;
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.07);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
+  margin-top: 24px;
+  padding: 4px 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
 }
 
 .nf-path__label {
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--text-4);
   letter-spacing: 0.04em;
 }
 
@@ -279,37 +232,37 @@ function askAi() {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 26px;
+  gap: 8px;
+  margin-top: 24px;
 }
 
 .nf-actions :deep(.el-button) {
-  height: 42px;
-  padding: 0 20px;
+  height: 40px;
+  padding: 0 16px;
 }
 
 .nf-actions :deep(.el-button--primary) {
-  box-shadow: 0 12px 26px rgba(108, 99, 255, 0.4);
+  box-shadow: none;
 }
 
 .nf-actions :deep(.el-button.is-plain) {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
+  border-color: var(--line-strong);
+  background: transparent;
 }
 
 .nf-actions :deep(.el-button.is-plain:hover) {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-1);
+  border-color: var(--text-3);
+  background: var(--surface-2);
 }
 
 .nf-ai-btn {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--brand-600);
 }
 
 .nf-ai-btn:hover {
-  color: #fff;
+  color: var(--brand-700);
 }
 
 .nf-foot {
@@ -317,65 +270,74 @@ function askAi() {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.46);
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
 }
 
 .nf-foot__link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: rgba(255, 255, 255, 0.78);
-  font-weight: 600;
+  gap: 4px;
+  color: var(--text-2);
+  font-weight: 500;
   transition: color var(--dur) var(--ease-out);
 }
 
 .nf-foot__link:hover {
-  color: #fff;
+  color: var(--brand-600);
 }
 
 .nf-foot__sep {
-  color: rgba(255, 255, 255, 0.26);
+  color: var(--line-strong);
 }
 
 .nf-stamp {
   position: absolute;
-  right: 34px;
-  bottom: 26px;
-  font-size: 10.5px;
+  right: 0;
+  bottom: 34px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.22em;
-  color: rgba(255, 255, 255, 0.22);
+  color: var(--text-4);
   text-transform: uppercase;
+  writing-mode: vertical-rl;
 }
 
-/* ---------- 快捷入口 ---------- */
+/* ---------- 快捷入口：两列错落的杂志节奏 ---------- */
 .nf-shortcuts {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 4px;
+  gap: 16px;
 }
 
 .nf-shortcuts .section-head {
-  margin: 0 2px;
+  margin: 0;
+}
+
+.nf-shortcuts .grid {
+  grid-template-columns: 1.35fr 1fr;
+}
+
+.nf-shortcuts .nf-link:nth-child(4n + 1) {
+  grid-column: span 2;
 }
 
 .nf-link {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
   color: inherit;
   text-decoration: none;
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+  transition: background var(--dur) var(--ease-out);
 }
 
 .nf-link:hover {
-  transform: translateY(-2px);
-  border-color: var(--brand-200);
-  box-shadow: var(--shadow-md);
+  background: var(--surface-2);
 }
 
 .nf-link__body {
@@ -384,16 +346,17 @@ function askAi() {
 }
 
 .nf-link__title {
-  margin: 0 0 3px;
-  font-size: 14.5px;
-  font-weight: 700;
+  margin: 0 0 4px;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .nf-link__desc {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -409,15 +372,10 @@ function askAi() {
 
 .nf-link:hover .nf-link__arrow {
   transform: translateX(3px);
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 @media (max-width: 900px) {
-  .nf-hero {
-    padding: 44px 34px 34px;
-    border-radius: 22px;
-  }
-
   .nf-stamp {
     display: none;
   }
@@ -425,28 +383,25 @@ function askAi() {
 
 @media (max-width: 640px) {
   .nf-hero {
-    padding: 30px 20px 26px;
-    border-radius: var(--radius-lg);
+    padding: 16px 0 24px;
   }
 
   .nf-code {
-    font-size: clamp(96px, 30vw, 136px);
-    margin-top: 8px;
+    font-size: clamp(72px, 24vw, 104px);
+    margin-top: 16px;
   }
 
   .nf-title {
-    margin-top: 14px;
+    font-size: var(--fs-2xl);
   }
 
   .nf-desc {
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     line-height: 1.8;
   }
 
   .nf-path {
-    display: flex;
     width: 100%;
-    border-radius: var(--radius);
   }
 
   .nf-path__label {
@@ -456,8 +411,7 @@ function askAi() {
   .nf-actions {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    margin-top: 22px;
+    gap: 8px;
   }
 
   .nf-actions :deep(.el-button) {
@@ -465,22 +419,22 @@ function askAi() {
     margin-left: 0;
   }
 
-  .nf-actions :deep(.el-button + .el-button) {
-    margin-left: 0;
-  }
-
   .nf-foot {
     align-items: flex-start;
     flex-direction: column;
-    gap: 9px;
+    gap: 8px;
+  }
+
+  .nf-shortcuts .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nf-shortcuts .nf-link:nth-child(4n + 1) {
+    grid-column: auto;
   }
 
   .nf-link {
-    padding: 16px;
-  }
-
-  .nf-link__desc {
-    -webkit-line-clamp: 1;
+    padding: 16px 0;
   }
 }
 </style>

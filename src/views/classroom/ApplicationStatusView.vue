@@ -21,7 +21,6 @@ import EmptyState from '@/components/EmptyState.vue'
 import AiBadge from '@/components/AiBadge.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { WEEK_CN, fmtDate, timeAgo } from '@/utils/format'
-import { sleep } from '@/utils/aiEngine'
 
 const router = useRouter()
 const classroom = useClassroomStore()
@@ -93,9 +92,14 @@ function goDetail(item) {
 
 async function refresh() {
   refreshing.value = true
-  await sleep(500)
-  refreshing.value = false
-  ElMessage.success('已刷新申请状态')
+  try {
+    await classroom.refreshApplications()
+    ElMessage.success('已同步最新申请状态')
+  } catch (error) {
+    ElMessage.error(error?.message || '刷新失败，请稍后重试')
+  } finally {
+    refreshing.value = false
+  }
 }
 
 onMounted(() => {
@@ -279,9 +283,9 @@ onBeforeUnmount(() => {
 /* ---------- AI 跟踪 ---------- */
 .track-notice {
   align-items: center;
-  padding: 13px 15px;
+  padding: 12px 16px;
   border: 1px solid var(--brand-100);
-  background: linear-gradient(120deg, var(--brand-50), var(--teal-50));
+  background: var(--brand-50);
   color: var(--text-2);
 }
 
@@ -292,8 +296,8 @@ onBeforeUnmount(() => {
   width: 31px;
   height: 31px;
   flex: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
 }
 
@@ -304,14 +308,14 @@ onBeforeUnmount(() => {
 
 .track-notice__text strong {
   display: block;
-  font-size: 12.5px;
-  font-weight: 680;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .track-notice__text p {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -321,8 +325,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 8px;
+  padding: 8px 12px;
 }
 
 .status-tabs {
@@ -340,7 +344,7 @@ onBeforeUnmount(() => {
 .status-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 34px;
   padding: 0 12px;
   flex: none;
@@ -364,7 +368,7 @@ onBeforeUnmount(() => {
 .status-tab.is-active {
   background: var(--brand-500);
   color: #fff;
-  box-shadow: 0 8px 18px -11px rgba(108, 99, 255, 0.95);
+  box-shadow: none;
 }
 
 .status-tab__count {
@@ -373,11 +377,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-width: 17px;
   height: 17px;
-  padding: 0 5px;
+  padding: 0 4px;
   border-radius: var(--radius-pill);
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -390,33 +394,30 @@ onBeforeUnmount(() => {
 .status-bar__summary {
   flex: none;
   padding-right: 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 /* ---------- 申请卡片 ---------- */
 .app-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(342px, 1fr));
-  gap: 16px;
+  display: block;
+  border-top: 1px solid var(--line);
 }
 
 .app-card {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
-  transition:
-    transform 0.24s var(--ease-out),
-    box-shadow 0.24s var(--ease-out),
-    border-color 0.24s var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .app-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--brand-200);
-  box-shadow: var(--shadow-md);
+  background: var(--surface-2);
 }
 
 .app-card:focus-visible {
@@ -438,17 +439,17 @@ onBeforeUnmount(() => {
   height: 56px;
   padding: 4px;
   flex: none;
-  border-radius: 14px;
+  border-radius: 8px;
   text-align: center;
 }
 
 .app-card__art span {
   position: relative;
   z-index: 1;
-  font-size: 11.5px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   word-break: break-word;
 }
 
@@ -466,9 +467,10 @@ onBeforeUnmount(() => {
 
 .app-card__title {
   margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
@@ -477,7 +479,7 @@ onBeforeUnmount(() => {
 
 .app-card__sub {
   margin: 4px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
@@ -488,11 +490,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  font-size: 11px;
+  gap: 8px 12px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
   color: var(--text-2);
 }
 
@@ -510,11 +512,13 @@ onBeforeUnmount(() => {
 .app-card__ai {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 11px;
-  border: 1px dashed var(--brand-100);
-  border-radius: 11px;
-  background: linear-gradient(135deg, rgba(238, 236, 255, 0.55), rgba(230, 250, 247, 0.45));
+  gap: 4px;
+  grid-column: 1 / -1;
+  padding: 2px 0 2px 12px;
+  border: none;
+  border-left: 2px solid var(--brand-200);
+  border-radius: 0;
+  background: transparent;
 }
 
 .app-card__ai-head {
@@ -527,42 +531,45 @@ onBeforeUnmount(() => {
 .app-card__ai-label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10.5px;
-  font-weight: 650;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--brand-700);
   letter-spacing: 0.02em;
 }
 
 .app-card__ai-text {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-2);
 }
 
 .app-card__foot {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
   gap: 8px;
-  margin-top: auto;
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
   padding-top: 2px;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .app-card__link {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   color: var(--brand-600);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 /* ---------- 空状态 ---------- */
 .app-empty {
-  padding: 10px;
+  padding: 8px;
 }
 
 .app-empty__icon {
@@ -571,8 +578,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 54px;
   height: 54px;
-  border-radius: 17px;
-  background: linear-gradient(135deg, #eeecff, #e6faf7);
+  border-radius: 8px;
+  background: var(--brand-50);
   color: var(--brand-500);
 }
 
@@ -592,7 +599,7 @@ onBeforeUnmount(() => {
 
 .sk {
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--surface-3) 25%, #fff 37%, var(--surface-3) 63%);
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 37%, var(--surface-3) 63%);
   background-size: 400% 100%;
   animation: sk-shimmer 1.4s ease infinite;
 }
@@ -601,7 +608,7 @@ onBeforeUnmount(() => {
   width: 56px;
   height: 56px;
   flex: none;
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .sk--line {
@@ -615,7 +622,7 @@ onBeforeUnmount(() => {
 
 .sk--block {
   height: 74px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .w40 {
@@ -644,8 +651,16 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .app-grid {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  .app-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-card__foot {
+    grid-column: 1;
+    grid-row: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 }
 
@@ -672,7 +687,7 @@ onBeforeUnmount(() => {
 
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
   }
 }
 </style>

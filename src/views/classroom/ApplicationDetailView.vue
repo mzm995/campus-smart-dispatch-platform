@@ -26,7 +26,6 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useUserStore } from '@/stores/user'
 import { WEEK_CN, fmtDate, fmtDateTime } from '@/utils/format'
-import { roomFreeAt, sleep } from '@/utils/aiEngine'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +53,10 @@ const statusCopy = computed(() => {
       title: '申请已取消',
       desc: '这条申请已关闭，如需使用场所可以重新提交申请。',
     },
+    expired: {
+      title: '临时占用已过期',
+      desc: '申请在审核时限内未处理，占用已经释放，请重新提交申请。',
+    },
   }
   return map[app.value?.status] || map.pending
 })
@@ -64,13 +67,16 @@ const statusIcon = computed(() => {
     approved: CircleCheck,
     rejected: CircleClose,
     cancelled: InfoFilled,
+    expired: InfoFilled,
   }
   return map[app.value?.status] || Clock
 })
 
 const toneClass = computed(() => `media-cover--${room.value?.tone || 'brand'}`)
 
-const canCancel = computed(() => app.value?.status === 'pending' && !user.isAdmin)
+const canCancel = computed(
+  () => ['pending', 'approved'].includes(app.value?.status) && !user.isAdmin,
+)
 const canReview = computed(() => Boolean(user.isAdmin && app.value?.status === 'pending'))
 
 const checks = computed(() => {
@@ -79,7 +85,16 @@ const checks = computed(() => {
   const people = Number(app.value.people) || 0
   const capacityMissing = Boolean(target && !target.capacity)
   const capacityOk = Boolean(target && target.capacity >= people)
-  const free = target ? roomFreeAt(target, app.value.day, app.value.start, app.value.end) : false
+  const block = target
+    ? classroom.blockAt(
+        target,
+        app.value.day,
+        app.value.start,
+        app.value.end,
+        app.value.date,
+      )
+    : null
+  const free = !block || block.sourceId === app.value.id
   return [
     {
       label: '容量匹配',
@@ -102,7 +117,7 @@ const checks = computed(() => {
       ok: free,
       text: free
         ? `${WEEK_CN[Number(app.value.day) % 7]} ${app.value.start}–${app.value.end} 当前空闲`
-        : '该时段当前显示为占用，请人工核对',
+        : `该时段由${block?.sourceType === 'application' ? '本申请' : '课程或其他安排'}占用`,
     },
   ]
 })
@@ -154,12 +169,11 @@ async function approve() {
       { confirmButtonText: '确认通过', cancelButtonText: '再想想', type: 'success' },
     )
     adminLoading.value = true
-    await sleep(600)
-    classroom.approve(app.value.id)
+    await classroom.approve(app.value.id)
     ElMessage.success('已审核通过，申请人会收到通知')
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error('操作没有完成，请稍后重试')
+      ElMessage.error(error?.message || '操作没有完成，请稍后重试')
     }
   } finally {
     adminLoading.value = false
@@ -178,11 +192,15 @@ async function submitReject() {
   }
   if (!app.value) return
   rejecting.value = true
-  await sleep(500)
-  classroom.reject(app.value.id, rejectReason.value.trim())
-  rejecting.value = false
-  rejectVisible.value = false
-  ElMessage.success('已驳回该申请')
+  try {
+    await classroom.reject(app.value.id, rejectReason.value.trim())
+    rejectVisible.value = false
+    ElMessage.success('已驳回该申请')
+  } catch (error) {
+    ElMessage.error(error?.message || '驳回失败，请稍后重试')
+  } finally {
+    rejecting.value = false
+  }
 }
 
 async function cancelApplication() {
@@ -194,12 +212,11 @@ async function cancelApplication() {
       type: 'warning',
     })
     cancelLoading.value = true
-    await sleep(500)
-    classroom.cancel(app.value.id)
+    await classroom.cancel(app.value.id)
     ElMessage.success('申请已取消')
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error('取消失败，请稍后重试')
+      ElMessage.error(error?.message || '取消失败，请稍后重试')
     }
   } finally {
     cancelLoading.value = false
@@ -549,9 +566,9 @@ async function cancelApplication() {
 .detail-crumb {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin-top: -4px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -559,13 +576,13 @@ async function cancelApplication() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 4px;
+  padding: 0px 4px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: var(--text-3);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: color 0.2s var(--ease-out);
 }
@@ -587,44 +604,44 @@ async function cancelApplication() {
 .detail-banner {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 15px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  gap: 16px;
+  padding: 16px 0 16px 16px;
+  border: none;
+  border-left: 2px solid var(--line-strong);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .detail-banner.is-pending {
-  border-color: var(--amber-100);
-  background: linear-gradient(120deg, #fff7e6, #fffdf7);
+  border-left-color: var(--amber-500);
+  background: var(--amber-50);
 }
 
 .detail-banner.is-approved {
-  border-color: var(--teal-100);
-  background: linear-gradient(120deg, #e6faf7, #f7fffd);
+  border-left-color: var(--teal-500);
+  background: var(--teal-50);
 }
 
 .detail-banner.is-rejected {
-  border-color: var(--coral-100);
-  background: linear-gradient(120deg, #fff0f0, #fffafa);
+  border-left-color: var(--coral-500);
+  background: var(--coral-50);
 }
 
 .detail-banner.is-cancelled {
-  border-color: var(--line);
-  background: linear-gradient(120deg, #f3f4fa, #fafbff);
+  border-left-color: var(--line-strong);
+  background: var(--surface-3);
 }
 
 .detail-banner__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 24px;
+  height: 24px;
   flex: none;
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 0;
+  background: transparent;
   color: var(--text-2);
-  box-shadow: var(--shadow-xs);
 }
 
 .is-pending .detail-banner__icon {
@@ -645,15 +662,16 @@ async function cancelApplication() {
 
 .detail-banner__title {
   margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .detail-banner__desc {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -662,7 +680,7 @@ async function cancelApplication() {
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
-  gap: 18px;
+  gap: 32px;
   align-items: start;
 }
 
@@ -670,7 +688,7 @@ async function cancelApplication() {
 .detail-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -678,7 +696,7 @@ async function cancelApplication() {
 .detail-room-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .detail-room-art {
@@ -689,7 +707,7 @@ async function cancelApplication() {
   height: 64px;
   padding: 4px;
   flex: none;
-  border-radius: 16px;
+  border-radius: 8px;
   text-align: center;
 }
 
@@ -697,7 +715,7 @@ async function cancelApplication() {
   position: relative;
   z-index: 1;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.25;
   word-break: break-word;
 }
@@ -705,14 +723,14 @@ async function cancelApplication() {
 .detail-room-title {
   margin: 0;
   font-size: var(--fs-xl);
-  font-weight: 750;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .detail-room-sub {
-  margin: 5px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -721,11 +739,11 @@ async function cancelApplication() {
   align-items: center;
   gap: 4px;
   flex: none;
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: var(--radius-pill);
   background: var(--amber-50);
   color: var(--amber-600);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -741,43 +759,43 @@ async function cancelApplication() {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
-  border-radius: 11px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
 .detail-metric span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .detail-metric strong {
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .detail-note {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
-  margin: 13px 0 0;
-  padding: 9px 11px;
-  border-radius: 10px;
+  gap: 4px;
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 /* ---------- AI 核验 ---------- */
 .detail-ai__summary {
   margin: 0;
-  padding: 12px 14px;
-  border: 1px dashed var(--brand-100);
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(238, 236, 255, 0.55), rgba(230, 250, 247, 0.45));
+  padding: 12px 12px;
+  border: 1px solid var(--brand-100);
+  border-radius: 8px;
+  background: var(--brand-50);
   font-size: 12px;
   line-height: 1.7;
   color: var(--text-2);
@@ -793,10 +811,10 @@ async function cancelApplication() {
 .detail-check {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
@@ -827,21 +845,21 @@ async function cancelApplication() {
 
 .detail-check strong {
   display: block;
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .detail-check p {
-  margin: 2px 0 0;
-  font-size: 10.5px;
+  margin: 0px 0 0;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
 
 .detail-check__state {
   flex: none;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--teal-600);
 }
@@ -852,12 +870,12 @@ async function cancelApplication() {
 
 .detail-ai__notice {
   margin-top: 12px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .detail-ai__foot {
   margin: 12px 0 0;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-3);
   line-height: 1.55;
 }
@@ -872,7 +890,7 @@ async function cancelApplication() {
 .detail-timeline__item {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
-  gap: 11px;
+  gap: 12px;
 }
 
 .detail-timeline__rail {
@@ -894,7 +912,7 @@ async function cancelApplication() {
 .detail-timeline__dot.is-done {
   background: var(--teal-500);
   color: #fff;
-  box-shadow: 0 4px 10px -5px rgba(18, 179, 166, 0.8);
+  box-shadow: none;
 }
 
 .detail-timeline__dot.is-pending {
@@ -914,8 +932,8 @@ async function cancelApplication() {
   width: 2px;
   flex: 1;
   min-height: 18px;
-  margin: 3px 0;
-  border-radius: 2px;
+  margin: 4px 0;
+  border-radius: 4px;
   background: var(--line);
 }
 
@@ -924,50 +942,50 @@ async function cancelApplication() {
 }
 
 .detail-timeline__body {
-  padding-bottom: 19px;
+  padding-bottom: 16px;
   min-width: 0;
 }
 
 .detail-timeline__item.is-last .detail-timeline__body {
-  padding-bottom: 2px;
+  padding-bottom: 0px;
 }
 
 .detail-timeline__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .detail-timeline__head strong {
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .detail-timeline__head time {
   flex: none;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
 
 .detail-timeline__body p {
   margin: 4px 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
 
 @keyframes timeline-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.4);
+    box-shadow: none;
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(245, 166, 35, 0);
+    box-shadow: none;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(245, 166, 35, 0);
+    box-shadow: none;
   }
 }
 
@@ -975,7 +993,7 @@ async function cancelApplication() {
 .detail-room {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
 }
 
 .detail-room__art {
@@ -984,17 +1002,17 @@ async function cancelApplication() {
   justify-content: center;
   width: 46px;
   height: 46px;
-  padding: 3px;
+  padding: 4px;
   flex: none;
-  border-radius: 12px;
+  border-radius: 8px;
   text-align: center;
 }
 
 .detail-room__art span {
   position: relative;
   z-index: 1;
-  font-size: 10.5px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.2;
   word-break: break-word;
 }
@@ -1003,60 +1021,60 @@ async function cancelApplication() {
   margin: 0;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .detail-room p {
-  margin: 3px 0 0;
-  font-size: 10.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .detail-room__meta {
   display: flex;
   gap: 8px;
-  margin-top: 11px;
-  font-size: 10.5px;
+  margin-top: 12px;
+  font-size: 12px;
   color: var(--text-2);
 }
 
 .detail-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 10px;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 .detail-free {
   margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .detail-free__label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .detail-free__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .detail-room__btn {
   width: 100%;
-  margin-top: 13px;
+  margin-top: 12px;
 }
 
 /* ---------- 申请人 ---------- */
 .detail-applicant {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .detail-avatar {
@@ -1066,8 +1084,8 @@ async function cancelApplication() {
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -1075,20 +1093,20 @@ async function cancelApplication() {
 
 .detail-applicant strong {
   display: block;
-  font-size: 12.5px;
-  font-weight: 680;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .detail-applicant p {
-  margin: 3px 0 0;
-  font-size: 10.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .detail-applicant__hint {
-  margin: 11px 0 0;
-  font-size: 10px;
+  margin: 12px 0 0;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -1119,9 +1137,9 @@ async function cancelApplication() {
 
 .detail-actions :deep(.detail-btn-reject) {
   border-color: transparent;
-  background: linear-gradient(135deg, #ff6b6b, #e5484d);
+  background: var(--coral-600);
   color: #fff;
-  box-shadow: 0 8px 16px -10px rgba(229, 72, 77, 0.85);
+  box-shadow: none;
 }
 
 .detail-actions :deep(.detail-btn-reject:hover) {
@@ -1133,15 +1151,15 @@ async function cancelApplication() {
 .detail-admin-mode {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin: 10px 0 0;
-  font-size: 10px;
+  gap: 4px;
+  margin: 8px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .detail-closed p {
   margin: 0 0 12px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.65;
   color: var(--text-2);
 }
@@ -1155,10 +1173,10 @@ async function cancelApplication() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   margin: 0;
   padding-top: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
@@ -1173,7 +1191,7 @@ async function cancelApplication() {
   justify-content: center;
   width: 54px;
   height: 54px;
-  border-radius: 17px;
+  border-radius: 8px;
   background: var(--amber-50);
   color: var(--amber-600);
 }
@@ -1187,7 +1205,7 @@ async function cancelApplication() {
 }
 
 .reject-dialog__chips {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 @media (max-width: 980px) {
@@ -1206,11 +1224,11 @@ async function cancelApplication() {
   .detail-banner {
     align-items: flex-start;
     flex-wrap: wrap;
-    padding: 13px 14px;
+    padding: 12px 12px;
   }
 
   .detail-banner :deep(.pill) {
-    margin-left: 51px;
+    margin-left: 48px;
   }
 
   .detail-room-head {

@@ -499,13 +499,13 @@ function tableRowClass({ row }) {
 <template>
   <div class="page admin">
     <PageHeader
-      eyebrow="SYSTEM · 高级管理员"
+      eyebrow="系统设置"
       title="系统控制台"
       desc="集中管理账号权限、场景配置、模型接入与审计记录，仅高级管理员可进入。"
     >
       <template #meta>
         <div v-if="auth.isSuperAdmin" class="row wrap gap-2">
-          <span class="tag-soft tag-soft--amber">
+          <span class="tag-soft">
             <el-icon><Lock /></el-icon>
             高级管理员视图
           </span>
@@ -688,7 +688,7 @@ function tableRowClass({ row }) {
                 :max-height="520"
                 :row-class-name="tableRowClass"
               >
-                <el-table-column label="成员" min-width="120">
+                <el-table-column label="成员" min-width="148">
                   <template #default="{ row }">
                     <div class="admin-user">
                       <button
@@ -713,21 +713,19 @@ function tableRowClass({ row }) {
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="学号" width="104">
+                <el-table-column label="学号" width="100">
                   <template #default="{ row }">
                     <span class="mono t-sm">{{ maskStudentNo(row.studentNo) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="角色 / 权限" min-width="106">
+                <el-table-column label="角色 / 权限" min-width="140">
                   <template #default="{ row }">
                     <span
                       class="tag-soft"
                       :class="
-                        row.roleKey === 'super_admin'
-                          ? 'tag-soft--coral'
-                          : row.roleKey === 'admin'
-                            ? 'tag-soft--amber'
-                            : 'tag-soft--brand'
+                        row.roleKey === 'super_admin' || row.roleKey === 'admin'
+                          ? 'tag-soft--brand'
+                          : ''
                       "
                     >
                       {{ row.role }}
@@ -738,10 +736,10 @@ function tableRowClass({ row }) {
                 <el-table-column
                   label="专业/部门"
                   prop="college"
-                  min-width="95"
+                  min-width="104"
                   show-overflow-tooltip
                 />
-                <el-table-column label="状态" width="84">
+                <el-table-column label="状态" width="80">
                   <template #default="{ row }">
                     <StatusPill
                       :status="userPill(row).status"
@@ -749,7 +747,7 @@ function tableRowClass({ row }) {
                     />
                   </template>
                 </el-table-column>
-                <el-table-column label="账号" width="58" align="right">
+                <el-table-column label="启停" width="72" align="right">
                   <template #default="{ row }">
                     <el-switch
                       :model-value="row.status === 'active'"
@@ -759,7 +757,7 @@ function tableRowClass({ row }) {
                     />
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="68" align="right">
+                <el-table-column label="操作" width="72" align="right">
                   <template #default="{ row }">
                     <div class="admin-row-actions">
                       <el-button
@@ -1292,37 +1290,47 @@ function tableRowClass({ row }) {
 
 <style scoped>
 .admin {
-  gap: 20px;
+  gap: 16px;
 }
 .console-nav {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface-2);
+  gap: 8px;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 .console-nav__item {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  padding: 12px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur), border-color var(--dur), box-shadow var(--dur);
+  transition: background var(--dur), border-color var(--dur);
 }
 .console-nav__item:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
 }
 .console-nav__item.is-active {
-  border-color: var(--brand-100);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
+  border-bottom-color: var(--brand-600);
+  background: transparent;
+  box-shadow: none;
+}
+.console-nav__item:not(.is-active) .console-nav__icon {
+  color: var(--text-3);
+  background: var(--surface-3);
+}
+.console-nav__item:not(.is-active) .console-nav__icon--teal {
+  color: var(--text-3);
+  background: var(--surface-3);
 }
 .console-nav__icon {
   display: inline-flex;
@@ -1331,10 +1339,10 @@ function tableRowClass({ row }) {
   width: 36px;
   height: 36px;
   flex: none;
-  border-radius: 11px;
+  border-radius: 8px;
   color: var(--brand-600);
   background: var(--brand-50);
-  font-size: 16px;
+  font-size: 18px;
 }
 .console-nav__icon--teal {
   color: var(--teal-600);
@@ -1343,28 +1351,28 @@ function tableRowClass({ row }) {
 .console-nav__item > span:nth-child(2) {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
 .console-nav__item strong {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 .console-nav__item small {
   overflow: hidden;
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-3);
 }
 .console-nav__item b {
   flex: none;
-  padding: 3px 7px;
+  padding: 4px 8px;
   border-radius: var(--radius-pill);
   color: var(--text-3);
   background: var(--surface-3);
-  font-size: 9.5px;
+  font-size: 12px;
 }
 .admin-loading {
   min-height: 320px;
@@ -1374,9 +1382,9 @@ function tableRowClass({ row }) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding-top: 46px;
-  padding-bottom: 46px;
+  gap: 8px;
+  padding-top: 48px;
+  padding-bottom: 48px;
   text-align: center;
 }
 .admin-state__icon {
@@ -1385,10 +1393,10 @@ function tableRowClass({ row }) {
   justify-content: center;
   width: 56px;
   height: 56px;
-  border-radius: 17px;
-  background: var(--brand-50, #f1f0ff);
+  border-radius: 8px;
+  background: var(--brand-50, #eef2f5);
   color: var(--brand-500);
-  font-size: 25px;
+  font-size: 24px;
   margin-bottom: 4px;
 }
 .admin-state__icon--coral {
@@ -1401,7 +1409,7 @@ function tableRowClass({ row }) {
   color: var(--text-1);
 }
 .admin-state p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   max-width: 470px;
   font-size: 13px;
   line-height: 1.7;
@@ -1409,39 +1417,43 @@ function tableRowClass({ row }) {
 }
 /* ---------- 布局 ---------- */
 .admin-grid {
+  /* 左栏用户表 7 列合计约 716px，7-5 分栏在 1440 视口只剩 649px，
+     会按比例压缩每一列；改为 8-4 让表格拿到完整列宽。 */
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
   align-items: start;
 }
 .admin-main {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 .admin-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 .admin-search {
   width: 210px;
 }
 .admin-role-level {
-  margin-left: 6px;
-  font-size: 10px;
+  margin-left: 4px;
+  font-size: 12px;
+  white-space: nowrap;
   color: var(--text-4);
 }
 .admin-row-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 2px;
+  gap: 0px;
 }
 .admin-filter-row {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .admin-chip-count {
-  margin-left: 5px;
-  font-size: 11px;
+  margin-left: 4px;
+  font-size: 12px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
 }
@@ -1450,21 +1462,21 @@ function tableRowClass({ row }) {
 }
 .admin-filter-row__total {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 .admin-note {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin: 14px 0 0;
-  font-size: 11px;
+  gap: 4px;
+  margin: 12px 0 0;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
 .admin-note .el-icon,
 .admin-note .dot {
-  margin-top: 2px;
+  margin-top: 0px;
   flex: none;
 }
 .admin-empty {
@@ -1480,7 +1492,7 @@ function tableRowClass({ row }) {
 .admin-user {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
 }
 .admin-avatar-button {
@@ -1488,13 +1500,13 @@ function tableRowClass({ row }) {
   flex: none;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
   transition: transform var(--dur) var(--ease-out);
 }
 .admin-avatar-button:hover {
-  transform: translateY(-1px) scale(1.04);
+  background: var(--surface-2);
 }
 .admin-avatar-button:focus-visible {
   outline: 2px solid var(--brand-400);
@@ -1508,7 +1520,7 @@ function tableRowClass({ row }) {
   width: 30px;
   height: 30px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -1522,22 +1534,22 @@ function tableRowClass({ row }) {
 .admin-user__meta {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0px;
   min-width: 0;
 }
 .admin-user__name {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
   line-height: 1.35;
 }
 .admin-user__source {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
   line-height: 1.35;
 }
 .admin-table :deep(.el-table__cell) {
-  padding: 9px 0;
+  padding: 8px 0;
 }
 .admin-table :deep(.el-switch) {
   --el-switch-on-color: var(--brand-500);
@@ -1545,28 +1557,32 @@ function tableRowClass({ row }) {
 .admin-table :deep(.pill) {
   white-space: nowrap;
 }
+/* 角色列：标签与等级保持同一条基线，不再被挤成两行 */
+.admin-table :deep(.tag-soft) {
+  white-space: nowrap;
+}
 .admin-table :deep(.is-deleted-row) {
   opacity: 0.62;
 }
 .admin-table :deep(.is-permission-selected > td.el-table__cell) {
-  background: rgba(108, 99, 255, 0.055);
+  background: var(--brand-50);
 }
 .admin-table :deep(.is-deleted-row .admin-user__name) {
   text-decoration: line-through;
 }
 .admin-user-card {
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--surface);
 }
 .admin-user-card + .admin-user-card {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 .admin-user-card__head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .admin-user-card__head .admin-user__meta {
   flex: 1;
@@ -1577,24 +1593,24 @@ function tableRowClass({ row }) {
 .admin-user-card__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .admin-user-card__grid div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .admin-user-card__grid span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
 }
 .admin-user-card__grid b {
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 600;
   color: var(--text-1);
   word-break: break-all;
 }
@@ -1602,10 +1618,10 @@ function tableRowClass({ row }) {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 14px;
-  margin-top: 11px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
   font-size: 12px;
   color: var(--text-3);
 }
@@ -1613,16 +1629,16 @@ function tableRowClass({ row }) {
 .admin-user-card__status {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .admin-user-card.is-deleted-card {
-  border-style: dashed;
+  border-style: solid;
   background: var(--surface-2);
 }
 .admin-user-card__delete {
   width: 100%;
-  margin-top: 11px;
+  margin-top: 12px;
 }
 .admin-user-card__role {
   flex: 1;
@@ -1642,31 +1658,31 @@ function tableRowClass({ row }) {
 .scene-row {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 0;
-  border-bottom: 1px dashed var(--line);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
 }
 .scene-row:first-child {
-  padding-top: 2px;
+  padding-top: 0px;
 }
 .scene-row:last-child {
   border-bottom: 0;
-  padding-bottom: 2px;
+  padding-bottom: 0px;
 }
 .scene-row__text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
 .scene-row__text strong {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 .scene-row__text span {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -1678,34 +1694,34 @@ function tableRowClass({ row }) {
   flex: none;
 }
 .scene-row__count {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
   font-variant-numeric: tabular-nums;
 }
 /* ---------- AI 参数 ---------- */
 .ai-param {
-  padding: 2px 0 4px;
+  padding: 0px 0 4px;
 }
 .ai-param__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 2px;
-  font-size: 12.5px;
+  margin-bottom: 0px;
+  font-size: 12px;
   color: var(--text-2);
 }
 .ai-param__head strong {
-  font-size: 19px;
-  font-weight: 750;
-  color: var(--brand-600, #5a51f0);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand-600, #33546b);
   font-variant-numeric: tabular-nums;
 }
 .ai-param :deep(.el-slider) {
   padding: 0 4px;
 }
 .ai-param__hint {
-  margin: 2px 0 0;
-  font-size: 11px;
+  margin: 0px 0 0;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
@@ -1713,34 +1729,34 @@ function tableRowClass({ row }) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px 0;
-  border-top: 1px dashed var(--line);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
 }
 .ai-param-row__text,
 .ai-switch-row__text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 .ai-param-row__text strong,
 .ai-switch-row__text strong {
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 .ai-param-row__text p,
 .ai-switch-row__text p {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
 .ai-param-row__control {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex: none;
 }
 .ai-param-row__control :deep(.el-input-number) {
@@ -1754,9 +1770,9 @@ function tableRowClass({ row }) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 13px 0;
-  border-top: 1px dashed var(--line);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
 }
 .ai-switch-row :deep(.el-switch) {
   flex: none;
@@ -1766,58 +1782,58 @@ function tableRowClass({ row }) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .ai-param__saved {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
 }
 .ai-provider-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .ai-provider-meta > div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 8px 8px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
 .ai-provider-meta span {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-4);
 }
 .ai-provider-meta strong {
   overflow: hidden;
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ai-provider-config {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .ai-provider-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .ai-provider-test {
-  margin: 10px 0 0;
-  font-size: 11px;
+  margin: 8px 0 0;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -1834,22 +1850,22 @@ function tableRowClass({ row }) {
 .log-time {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   font-size: 12px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .log-time .faint {
-  font-size: 11px;
+  font-size: 12px;
 }
 .log-demand {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
 }
 .log-demand__raw {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-1);
   overflow: hidden;
@@ -1858,7 +1874,7 @@ function tableRowClass({ row }) {
   cursor: default;
 }
 .log-demand__summary {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1872,7 +1888,7 @@ function tableRowClass({ row }) {
 .log-conf__bar {
   flex: 1;
   height: 5px;
-  border-radius: 999px;
+  border-radius: 1px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -1885,7 +1901,7 @@ function tableRowClass({ row }) {
 .log-conf b {
   flex: none;
   min-width: 32px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-2);
   text-align: right;
 }
@@ -1899,44 +1915,44 @@ function tableRowClass({ row }) {
   color: var(--amber-600, #b7791f);
 }
 .log-card {
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--surface);
 }
 .log-card + .log-card {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 .log-card__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 .log-card__head :deep(.pill) {
   margin-left: auto;
 }
 .log-card__raw {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   font-size: 13px;
-  font-weight: 620;
+  font-weight: 600;
   line-height: 1.55;
   color: var(--text-1);
 }
 .log-card__summary {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 8px;
   background: var(--surface-2);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-2);
 }
 .log-card__conf {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 }
 .log-card__conf .log-conf {
   flex: 1;
@@ -1945,8 +1961,8 @@ function tableRowClass({ row }) {
 .admin-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  padding: 16px 20px;
+  gap: 12px;
+  padding: 16px 16px;
 }
 .admin-meta__item {
   display: flex;
@@ -1955,17 +1971,24 @@ function tableRowClass({ row }) {
   min-width: 0;
 }
 .admin-meta__item span {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--text-4);
 }
 .admin-meta__item strong {
-  font-size: 12.5px;
-  font-weight: 620;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-2);
 }
 /* ---------- 响应式 ---------- */
-@media (max-width: 1180px) {
+@media (max-width: 1420px) {
+  /* 1420 以下 8-4 分栏会让左栏掉到 716px 以下，把一点宽度让给用户表 */
+  .admin-grid {
+    grid-template-columns: minmax(0, 8.5fr) minmax(0, 3.5fr);
+  }
+}
+@media (max-width: 1340px) {
+  /* 左栏低于 716px 时表格会横向溢出，改为单栏让表格独占整行 */
   .admin-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1973,6 +1996,15 @@ function tableRowClass({ row }) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+  }
+}
+@media (max-width: 1020px) {
+  /* 单栏后内容区仍不足 716px：提前切到卡片视图，避免表格横向滚动 */
+  .admin-desk {
+    display: none;
+  }
+  .admin-mob {
+    display: block;
   }
 }
 @media (max-width: 900px) {
@@ -2026,7 +2058,7 @@ function tableRowClass({ row }) {
   .admin :deep(.sec__head) {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
   }
   .admin :deep(.sec__actions) {
     width: 100%;
@@ -2043,7 +2075,7 @@ function tableRowClass({ row }) {
   }
   .scene-row__side {
     align-items: flex-end;
-    padding-top: 1px;
+    padding-top: 0px;
   }
   .ai-param-row {
     flex-wrap: wrap;

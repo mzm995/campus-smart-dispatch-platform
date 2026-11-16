@@ -14,12 +14,12 @@ import AiBadge from '@/components/AiBadge.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { WEEK_CN } from '@/utils/format'
-import { roomFreeAt } from '@/utils/aiEngine'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   room: { type: Object, default: null },
   day: { type: Number, default: 3 },
+  date: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue', 'apply'])
@@ -59,7 +59,7 @@ const dayBusy = computed(() =>
     .sort((a, b) => a.start.localeCompare(b.start)),
 )
 const freeSlots = computed(() =>
-  props.room ? classroom.freeSlotsOf(props.room, activeDay.value) : [],
+  props.room ? classroom.freeSlotsOf(props.room, activeDay.value, props.date) : [],
 )
 const criteriaSlot = computed(() => {
   const criteria = classroom.criteria
@@ -72,7 +72,13 @@ const criteriaSlot = computed(() => {
 const checkingCriteria = computed(() => criteriaSlot.value.day === activeDay.value)
 const criteriaConflict = computed(() => {
   if (!props.room || !checkingCriteria.value) return false
-  return !roomFreeAt(props.room, activeDay.value, criteriaSlot.value.start, criteriaSlot.value.end)
+  return !classroom.roomFreeAt(
+    props.room,
+    activeDay.value,
+    criteriaSlot.value.start,
+    criteriaSlot.value.end,
+    props.date,
+  )
 })
 
 function applyRoom() {
@@ -255,7 +261,7 @@ function applyRoom() {
 }
 
 .rd__close:hover {
-  background: #fff;
+  background: var(--surface);
 }
 
 .rd__campus {
@@ -264,21 +270,21 @@ function applyRoom() {
   display: inline-flex;
   align-items: center;
   height: 21px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.62);
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .rd__code {
   position: relative;
   z-index: 1;
   margin-top: 8px;
-  font-size: 30px;
-  font-weight: 780;
+  font-size: 28px;
+  font-weight: 700;
   line-height: 1.1;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
@@ -289,9 +295,9 @@ function applyRoom() {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  margin-top: 6px;
-  font-size: 11px;
-  font-weight: 550;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-2);
   opacity: 0.86;
 }
@@ -299,19 +305,19 @@ function applyRoom() {
 .rd__meta span {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .rd__tags {
-  gap: 6px;
+  gap: 4px;
 }
 
 .rd__meta-card {
   display: grid;
   gap: 8px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius);
   background: var(--surface-2);
 }
 
@@ -319,7 +325,7 @@ function applyRoom() {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -337,14 +343,14 @@ function applyRoom() {
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .rd__ai {
-  padding: 13px 14px;
-  border: 1px dashed var(--brand-200);
+  padding: 12px 12px;
+  border: 1px solid var(--brand-200);
   border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(238, 236, 255, 0.7), rgba(230, 250, 247, 0.6));
+  background: var(--brand-50);
 }
 
 .rd__ai-head {
@@ -357,9 +363,9 @@ function applyRoom() {
 .rd__label {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 650;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--brand-700);
   letter-spacing: 0.02em;
 }
@@ -377,36 +383,36 @@ function applyRoom() {
 
 .rd__warn {
   margin-top: 8px;
-  padding: 8px 10px;
-  font-size: 11px;
+  padding: 8px 8px;
+  font-size: 12px;
 }
 
 .rd__ok {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--teal-600);
 }
 
 .rd__section {
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .rd__section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .rd__days {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .rd__days .chip {
@@ -416,22 +422,22 @@ function applyRoom() {
 .rd__busy {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin-top: 11px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .rd__busy-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 11px;
-  border-radius: 11px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: var(--surface-3);
 }
 
 .rd__busy-time {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--amber-600);
   font-variant-numeric: tabular-nums;
@@ -441,7 +447,7 @@ function applyRoom() {
   flex: 1;
   min-width: 0;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
@@ -450,7 +456,7 @@ function applyRoom() {
 
 .rd__tip {
   margin: 8px 0 0;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -460,41 +466,40 @@ function applyRoom() {
   justify-content: space-between;
   gap: 12px;
   margin-top: auto;
-  padding-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
 .rd__foot-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
 }
 
 .rd__foot-text strong {
   font-size: 14px;
-  font-weight: 720;
+  font-weight: 700;
   color: var(--text-1);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .rd__foot-text span {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 @media (max-width: 640px) {
   .rd__code {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .rd__foot {
     position: sticky;
     bottom: -20px;
     margin: 0 -20px -20px;
-    padding: 12px 20px 16px;
+    padding: 12px 16px 16px;
     background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(10px);
   }
 }
 </style>

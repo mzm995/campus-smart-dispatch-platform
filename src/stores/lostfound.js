@@ -4,7 +4,8 @@ import { lostfoundPosts } from '@/mock/seed'
 import { buildLostfoundCopy, scoreLostPair, sleep } from '@/utils/aiEngine'
 import { uid } from '@/utils/format'
 import { loadState } from '@/utils/storage'
-import { bindSharedState } from '@/utils/cloudSync'
+import { bindSharedState, flushAll } from '@/utils/cloudSync'
+import { apiRequest } from '@/utils/api'
 import { useNotifyStore } from './notify'
 import { useUserStore } from './user'
 
@@ -16,6 +17,8 @@ export const useLostfoundStore = defineStore('lostfound', () => {
   const keyword = ref('')
   const typeFilter = ref('all')
   const categoryFilter = ref('全部类别')
+  const watches = ref([])
+  const watchesLoading = ref(false)
 
   const lostPosts = computed(() => posts.value.filter((p) => p.type === 'lost'))
   const foundPosts = computed(() => posts.value.filter((p) => p.type === 'found'))
@@ -148,6 +151,21 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     posts.value.unshift(post)
     publishing.value = false
 
+    await flushAll().catch(() => {})
+    if (post.type === 'found') {
+      apiRequest('/lostfound/watches/match', {
+        method: 'POST',
+        body: { postId: post.id },
+      }).catch(() => {
+        window.setTimeout(() => {
+          apiRequest('/lostfound/watches/match', {
+            method: 'POST',
+            body: { postId: post.id },
+          }).catch(() => {})
+        }, 1800)
+      })
+    }
+
     const matches = matchesFor(post.id)
     if (matches.length) {
       notify.add({
@@ -211,7 +229,9 @@ export const useLostfoundStore = defineStore('lostfound', () => {
 
   function claimFoundItem(foundId, payload = {}) {
     const foundPost = posts.value.find((item) => item.id === foundId)
-    const lostPost = posts.value.find((item) => item.id === payload.lostPostId)
+    const lostPost = payload.lostPostId
+      ? posts.value.find((item) => item.id === payload.lostPostId)
+      : null
     const user = useUserStore()
     if (!foundPost || foundPost.type !== 'found') {
       return { ok: false, message: '招领信息不存在' }
@@ -219,14 +239,17 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     if (foundPost.status === 'resolved') {
       return { ok: false, message: '该物品已经被认领' }
     }
+    if (foundPost.status === 'claimed_pending') {
+      return { ok: false, message: '该物品正在核验其他认领申请，请稍后再试' }
+    }
     if (isOwner(foundPost)) {
       return { ok: false, message: '不能认领自己发布的招领信息' }
     }
-    if (!lostPost || lostPost.type !== 'lost' || !isOwner(lostPost)) {
-      return { ok: false, message: '请选择一条由你发布且仍在寻找中的寻物信息' }
+    if (payload.lostPostId && (!lostPost || lostPost.type !== 'lost' || !isOwner(lostPost))) {
+      return { ok: false, message: '关联的寻物信息无效，请取消关联后重试' }
     }
-    if (lostPost.status === 'resolved') {
-      return { ok: false, message: '所选寻物信息已经完成' }
+    if (lostPost?.status === 'resolved') {
+      return { ok: false, message: '关联的寻物信息已经完成' }
     }
     const existing = claimsOf(foundPost).find(
       (claim) =>
@@ -237,7 +260,9 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     if (existing) return { ok: false, message: '你已经提交过认领申请' }
     const description = String(payload.description || '').trim()
     if (!description) return { ok: false, message: '请补充能够核验物品归属的说明' }
-    const reward = rewardOf(lostPost)
+    const reward = lostPost
+      ? rewardOf(lostPost)
+      : { enabled: false, amount: 0, note: '' }
     const claim = {
       id: uid('found_claim'),
       kind: 'found_claim',
@@ -245,8 +270,8 @@ export const useLostfoundStore = defineStore('lostfound', () => {
       claimantId: user.user?.id || '',
       claimantName: user.user?.name || '匿名同学',
       helperName: user.user?.name || '匿名同学',
-      lostPostId: lostPost.id,
-      lostPostTitle: lostPost.title,
+      lostPostId: lostPost?.id || '',
+      lostPostTitle: lostPost?.title || '',
       contact: String(payload.contact || '站内联系').trim(),
       mode: 'found_claim',
       description,
@@ -261,7 +286,7 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     useNotifyStore().add({
       type: 'match',
       title: '收到新的失物认领申请',
-      content: `${claim.claimantName} 认领「${foundPost.title}」，关联寻物：${lostPost.title}`,
+      content: `${claim.claimantName} 认领「${foundPost.title}」${lostPost ? `，关联寻物：${lostPost.title}` : ''}`,
       link: '/lostfound',
       important: true,
       recipientUserId: foundPost.ownerId || '',
@@ -323,8 +348,10 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     if (claim.status !== 'approved') {
       return { ok: false, message: '认领申请尚未通过审核' }
     }
-    const lostPost = posts.value.find((item) => item.id === claim.lostPostId)
-    if (!lostPost || !isOwner(lostPost)) {
+    const lostPost = claim.lostPostId
+      ? posts.value.find((item) => item.id === claim.lostPostId)
+      : null
+    if (claim.lostPostId && (!lostPost || !isOwner(lostPost))) {
       return { ok: false, message: '关联的寻物信息不存在或不属于当前账号' }
     }
     const completedAt = new Date().toISOString()
@@ -335,9 +362,11 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     foundPost.status = 'resolved'
     foundPost.resolvedAt = completedAt
     foundPost.claimedBy = claim.claimantId
-    lostPost.status = 'resolved'
-    lostPost.resolvedAt = completedAt
-    lostPost.claimedFoundPostId = foundPost.id
+    if (lostPost) {
+      lostPost.status = 'resolved'
+      lostPost.resolvedAt = completedAt
+      lostPost.claimedFoundPostId = foundPost.id
+    }
     useNotifyStore().add({
       type: 'status',
       title: claim.rewardEnabled ? '失物认领完成并收到寻物打赏' : '失物认领已完成',
@@ -471,6 +500,34 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     categoryFilter.value = '全部类别'
   }
 
+  async function loadWatches() {
+    watchesLoading.value = true
+    try {
+      const data = await apiRequest('/lostfound/watches')
+      watches.value = Array.isArray(data.watches) ? data.watches : []
+      return watches.value
+    } finally {
+      watchesLoading.value = false
+    }
+  }
+
+  async function createWatch(criteria, days = 30) {
+    const data = await apiRequest('/lostfound/watches', {
+      method: 'POST',
+      body: { criteria, days },
+    })
+    watches.value.unshift(data.watch)
+    return data.watch
+  }
+
+  async function closeWatch(id) {
+    await apiRequest(`/lostfound/watches/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+    const index = watches.value.findIndex((watch) => watch.id === id)
+    if (index >= 0) watches.value.splice(index, 1)
+  }
+
   bindSharedState(V, posts, '失物招领')
 
   return {
@@ -479,6 +536,8 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     keyword,
     typeFilter,
     categoryFilter,
+    watches,
+    watchesLoading,
     lostPosts,
     foundPosts,
     openCount,
@@ -505,5 +564,8 @@ export const useLostfoundStore = defineStore('lostfound', () => {
     reopen,
     remove,
     resetFilters,
+    loadWatches,
+    createWatch,
+    closeWatch,
   }
 })

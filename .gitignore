@@ -9,12 +9,8 @@ server/data/*.db
 server/data/*.db-*
 server/data/.secrets-key
 
-# 随包附带的便携 Node 运行时（94MB，不纳入版本库）
+# 部署排除：本地运行产物、数据库与 PPT（与线上仓库保持一致）
 runtime/
-
-# 便于离线演示的本地数据库、上传文件与备份，不入库
 server/data/
-
-# PPT 交付件与其制作素材（按交付要求不上传）
 docs/*.pptx
 docs/ppt-assets/

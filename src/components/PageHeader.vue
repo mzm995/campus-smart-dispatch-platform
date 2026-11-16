@@ -9,9 +9,7 @@ defineProps({
 <template>
   <header class="page-head">
     <div class="page-head__main">
-      <div v-if="eyebrow" class="page-head__eyebrow">
-        <span class="dot dot--brand"></span>{{ eyebrow }}
-      </div>
+      <div v-if="eyebrow" class="page-head__eyebrow">{{ eyebrow }}</div>
       <h1 class="page-head__title">{{ title }}</h1>
       <p v-if="desc" class="page-head__desc">{{ desc }}</p>
       <slot name="meta" />
@@ -27,49 +25,62 @@ defineProps({
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
   flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 .page-head__eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   font-size: var(--fs-xs);
-  font-weight: 650;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--text-3);
-  text-transform: uppercase;
+}
+
+.page-head__eyebrow::before {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--line-strong);
 }
 
 .page-head__title {
   margin: 0;
-  font-size: clamp(22px, 2.4vw, 30px);
-  font-weight: 760;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  font-family: var(--font-serif);
+  font-size: var(--fs-3xl);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
   color: var(--text-1);
 }
 
 .page-head__desc {
   margin: 8px 0 0;
-  max-width: 640px;
+  max-width: 62ch;
   font-size: var(--fs-base);
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--text-2);
 }
 
 .page-head__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 @media (max-width: 640px) {
   .page-head {
     align-items: flex-start;
+  }
+
+  .page-head__title {
+    font-size: var(--fs-2xl);
   }
 
   .page-head__actions {

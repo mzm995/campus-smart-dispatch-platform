@@ -261,9 +261,13 @@ onMounted(async () => {
   const type = text(q.type)
   if (type === 'lost' || type === 'found') form.type = type
   if (text(q.item)) form.item = text(q.item)
+  if (text(q.category) && categories.includes(text(q.category))) {
+    form.category = text(q.category)
+  }
   if (text(q.color)) form.color = text(q.color)
   if (text(q.place)) form.place = text(q.place)
   if (text(q.time)) form.time = text(q.time)
+  if (text(q.description)) form.description = text(q.description)
 
   if (q.from === 'ai') {
     prefilled.value = true
@@ -282,7 +286,7 @@ onBeforeUnmount(() => {
   <div class="page">
     <PageHeader
       title="发布失物 / 招领"
-      eyebrow="SCENE 02 · AI 生成文案"
+      eyebrow="场景 02 · AI 生成文案"
       desc="把物品、颜色、地点告诉 AI，它会扩写成一条规范信息，并自动进入双向匹配池。"
     >
       <template #meta>
@@ -657,7 +661,7 @@ onBeforeUnmount(() => {
 }
 
 .prefill-notice p {
-  margin: 2px 0 0;
+  margin: 0px 0 0;
   font-size: var(--fs-xs);
   line-height: 1.65;
   opacity: 0.9;
@@ -671,11 +675,11 @@ onBeforeUnmount(() => {
 .publish-form {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
 }
 
 .type-item {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .type-pick {
@@ -694,7 +698,7 @@ onBeforeUnmount(() => {
   align-items: center;
   width: 100%;
   height: auto;
-  padding: 10px 12px;
+  padding: 8px 12px;
   margin: 0;
   border: 1px solid var(--line) !important;
   border-radius: var(--radius-sm) !important;
@@ -718,7 +722,7 @@ onBeforeUnmount(() => {
 .type-opt {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
   text-align: left;
 }
@@ -730,8 +734,8 @@ onBeforeUnmount(() => {
   flex: none;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  font-size: 15px;
+  border-radius: 8px;
+  font-size: 14px;
 }
 
 .type-opt__icon--lost {
@@ -753,12 +757,12 @@ onBeforeUnmount(() => {
 
 .type-opt__text b {
   font-size: var(--fs-sm);
-  font-weight: 680;
+  font-weight: 600;
   line-height: 1.35;
 }
 
 .type-opt__text small {
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text-3);
   white-space: nowrap;
@@ -777,11 +781,11 @@ onBeforeUnmount(() => {
 }
 
 .publish-form :deep(.el-form-item) {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .publish-form :deep(.el-form-item__label) {
-  padding-bottom: 5px !important;
+  padding-bottom: 4px !important;
 }
 
 .field-hint {
@@ -789,13 +793,13 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 4px;
   margin: 0 0 16px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
 
 .field-hint .el-icon {
-  margin-top: 2px;
+  margin-top: 0px;
   flex: none;
 }
 
@@ -807,17 +811,17 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin: 2px 0 18px;
-  padding: 15px 16px;
+  margin: 0px 0 16px;
+  padding: 16px 16px;
   border: 1px solid rgba(245, 166, 35, 0.22);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(245, 166, 35, 0.08), rgba(255, 255, 255, 0.9));
+  background: var(--amber-50);
 }
 
 .reward-editor__head {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
 }
 
 .reward-editor__icon {
@@ -827,7 +831,7 @@ onBeforeUnmount(() => {
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--amber-600);
   background: var(--surface);
   box-shadow: var(--shadow-xs);
@@ -846,8 +850,8 @@ onBeforeUnmount(() => {
 }
 
 .reward-editor__head p {
-  margin: 3px 0 0;
-  font-size: 11px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
@@ -866,7 +870,7 @@ onBeforeUnmount(() => {
 
 .reward-editor__hint {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
@@ -874,17 +878,17 @@ onBeforeUnmount(() => {
 .reward-editor__none {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.72);
   color: var(--text-2);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .reward-editor__none .el-icon {
-  margin-top: 2px;
+  margin-top: 0px;
   flex: none;
   color: var(--amber-600);
 }
@@ -892,8 +896,8 @@ onBeforeUnmount(() => {
 .preview-reward {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 .preview-reward .tag-soft {
@@ -904,11 +908,11 @@ onBeforeUnmount(() => {
 .ai-box {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 15px 16px;
-  margin: 2px 0 4px;
+  gap: 12px;
+  padding: 16px 16px;
+  margin: 0px 0 4px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--brand-50) 0%, #eefaf8 100%);
+  background: var(--brand-50);
   border: 1px solid var(--brand-100);
 }
 
@@ -919,7 +923,7 @@ onBeforeUnmount(() => {
   flex: none;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--brand-600);
   box-shadow: var(--shadow-xs);
@@ -932,12 +936,12 @@ onBeforeUnmount(() => {
 
 .ai-box__main b {
   font-size: var(--fs-sm);
-  font-weight: 680;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .ai-box__main p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--text-3);
@@ -960,7 +964,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 10px 0 2px;
+  margin: 8px 0 0px;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   background: var(--brand-50);
@@ -978,7 +982,7 @@ onBeforeUnmount(() => {
   width: 92px;
   height: 92px;
   border-radius: var(--radius-sm);
-  border: 1.5px dashed var(--line-strong);
+  border: 1.5px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text-3);
   transition: border-color var(--dur), background var(--dur);
@@ -1006,9 +1010,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   margin-top: 4px;
-  padding-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
@@ -1021,7 +1025,7 @@ onBeforeUnmount(() => {
 .publish-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
   position: sticky;
   top: 84px;
@@ -1035,36 +1039,36 @@ onBeforeUnmount(() => {
 .preview-card {
   position: relative;
   overflow: hidden;
-  padding: 15px;
+  padding: 16px;
   border-radius: var(--radius);
   border: 1px solid #ffe3d3;
-  background: linear-gradient(160deg, #fff7f0 0%, var(--surface) 58%);
+  background: var(--amber-50);
 }
 
 .preview-card--found {
   border-color: var(--teal-100);
-  background: linear-gradient(160deg, #eefaf8 0%, var(--surface) 58%);
+  background: var(--teal-50);
 }
 
 .preview-card__head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .preview-card__title {
-  margin: 10px 0 0;
-  font-size: 15px;
-  font-weight: 680;
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.45;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .preview-card__desc {
-  margin: 6px 0 0;
-  font-size: 12.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.7;
   color: var(--text-2);
 }
@@ -1072,10 +1076,10 @@ onBeforeUnmount(() => {
 .preview-card__meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
-  font-size: 11.5px;
+  margin-top: 8px;
+  font-size: 12px;
   color: var(--text-2);
 }
 
@@ -1104,7 +1108,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-pill);
   background: var(--surface-3);
   color: var(--text-2);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   user-select: none;
 }
@@ -1112,15 +1116,15 @@ onBeforeUnmount(() => {
 .preview-card__tags {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
-  margin-top: 9px;
+  margin-top: 8px;
 }
 
 .preview-card__image {
   width: 100%;
   max-height: 150px;
-  margin-top: 11px;
+  margin-top: 12px;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
@@ -1132,13 +1136,13 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 11px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .preview-card__foot .tag-soft {
-  font-size: 10.5px;
+  font-size: 12px;
   height: 22px;
   padding: 0 8px;
 }
@@ -1147,7 +1151,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 13px;
+  margin-top: 12px;
   padding: 12px;
   border-radius: var(--radius);
   background: var(--surface-2);
@@ -1160,14 +1164,14 @@ onBeforeUnmount(() => {
 
 .preview-meter__main b {
   display: block;
-  font-size: 12.5px;
-  font-weight: 680;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .preview-meter__main p {
-  margin: 2px 0 0;
-  font-size: 11px;
+  margin: 0px 0 0;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
@@ -1179,31 +1183,31 @@ onBeforeUnmount(() => {
 }
 
 .preview-note .el-icon {
-  margin-top: 2px;
+  margin-top: 0px;
   flex: none;
 }
 
 /* 隐私卡 */
 .privacy-card {
-  padding: 17px 18px;
+  padding: 16px 16px;
 }
 
 .privacy-card b {
   font-size: var(--fs-sm);
-  font-weight: 680;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .privacy-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .privacy-list li {
   position: relative;
-  padding-left: 13px;
+  padding-left: 12px;
   font-size: var(--fs-xs);
   line-height: 1.65;
   color: var(--text-3);
@@ -1226,8 +1230,8 @@ onBeforeUnmount(() => {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 /* ---------- 响应式 ---------- */
@@ -1285,7 +1289,7 @@ onBeforeUnmount(() => {
   }
 
   .preview-card {
-    padding: 13px;
+    padding: 12px;
   }
 
   .prefill-notice {

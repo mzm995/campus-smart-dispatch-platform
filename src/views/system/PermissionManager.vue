@@ -209,7 +209,7 @@ async function savePermission() {
           :user-id="target.id"
           :src="target.avatarUrl"
           :size="38"
-          :radius="11"
+          :radius="4"
         />
         <div class="permission-target__copy">
           <strong>{{ target.name }}</strong>
@@ -336,17 +336,17 @@ async function savePermission() {
 .permission-editor__body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .permission-target {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 11px 12px;
+  gap: 12px;
+  padding: 12px 12px;
   border: 1px solid var(--brand-100);
-  border-radius: 12px;
-  background: linear-gradient(120deg, var(--brand-50), rgba(18, 179, 166, 0.055));
+  border-radius: 8px;
+  background: var(--brand-50);
 }
 
 .permission-target__avatar {
@@ -356,10 +356,10 @@ async function savePermission() {
   width: 38px;
   height: 38px;
   overflow: hidden;
-  border-radius: 11px;
+  border-radius: 8px;
   color: #fff;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .permission-target__avatar img {
@@ -372,7 +372,7 @@ async function savePermission() {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
 }
 
@@ -383,7 +383,7 @@ async function savePermission() {
 
 .permission-target__copy span {
   overflow: hidden;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -399,14 +399,14 @@ async function savePermission() {
 .permission-access {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .permission-field > span,
 .permission-access > span {
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-3);
 }
 
@@ -415,9 +415,9 @@ async function savePermission() {
 }
 
 .permission-access {
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
@@ -427,13 +427,13 @@ async function savePermission() {
 }
 
 .permission-access small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
 .permission-role-note {
   margin: -2px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }
@@ -441,21 +441,21 @@ async function savePermission() {
 .permission-modules {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 
 .permission-module {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  padding: 7px 6px;
-  border: 1px dashed var(--line);
-  border-radius: 9px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--surface-2);
   color: var(--text-4);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -471,25 +471,25 @@ async function savePermission() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   padding-top: 12px;
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .permission-editor__foot p {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: 4px;
   margin: 0;
   max-width: 390px;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-4);
 }
 
 .permission-editor__foot p .el-icon {
   flex: none;
-  margin-top: 2px;
+  margin-top: 0px;
   color: var(--amber-500);
 }
 
@@ -501,23 +501,23 @@ async function savePermission() {
 
 .permission-guide {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
 }
 
 .permission-guide article {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
 .permission-guide article > span {
   display: block;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
   color: var(--brand-500);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .permission-guide strong {
@@ -528,7 +528,7 @@ async function savePermission() {
 
 .permission-guide p {
   margin: 4px 0 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-3);
 }

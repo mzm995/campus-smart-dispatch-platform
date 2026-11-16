@@ -2,10 +2,11 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { loadEnvFile } from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { openDatabase, createDatabaseRepository } from './db.js'
+import { classrooms as campusClassrooms } from '../src/mock/seed.js'
 import { verifyPassword } from './passwords.js'
 import {
   canAccessModule,
@@ -69,6 +70,9 @@ class HttpError extends Error {
 const db = openDatabase(DB_PATH)
 const repo = createDatabaseRepository(db)
 let maintenanceTimer = null
+let classroomAvailabilityVersion = 1
+const classroomEventClients = new Set()
+const ROOMS_BY_ID = new Map(campusClassrooms.map((room) => [room.id, room]))
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -319,11 +323,12 @@ function bearerToken(req) {
   return header.slice(7).trim()
 }
 
-function authenticate(req) {
-  const user = repo.getSessionUser(bearerToken(req))
+function authenticate(req, explicitToken = '') {
+  const token = explicitToken || bearerToken(req)
+  const user = repo.getSessionUser(token)
   if (!user) throw new HttpError(401, 'UNAUTHENTICATED', '登录状态已失效，请重新登录')
   if (user.status !== 'active') {
-    repo.deleteSession(bearerToken(req))
+    repo.deleteSession(token)
     throw new HttpError(403, 'ACCOUNT_INACTIVE', '账号已停用或待审核，请联系管理员')
   }
   return user
@@ -929,6 +934,7 @@ function sanitizeLostfoundClaims(actor, previousClaims = [], incomingClaims = []
       ...claim,
       helperId: actor.id,
       helperName: actor.name,
+      ...(claim.kind === 'found_claim' ? { claimantId: actor.id } : {}),
       status: 'submitted',
     })
   }
@@ -971,6 +977,22 @@ function sanitizeLostfoundMutation(actor, current, incoming) {
       Array.isArray(previous.claims) ? previous.claims : [],
       Array.isArray(item.claims) ? item.claims : previous.claims || [],
     )
+    const previousClaimIds = new Set(
+      (Array.isArray(previous.claims) ? previous.claims : []).map((claim) => claim.id),
+    )
+    const hasNewClaim = (Array.isArray(item.claims) ? item.claims : []).some(
+      (claim) => claim?.id && !previousClaimIds.has(claim.id),
+    )
+    if (
+      hasNewClaim &&
+      ['resolved', 'claimed_pending'].includes(previous.status)
+    ) {
+      throw new HttpError(
+        409,
+        'LOSTFOUND_CLAIM_CLOSED',
+        '该招领信息正在核验或已经完成，不能新增认领申请',
+      )
+    }
     const completedFoundClaim =
       item.status === 'resolved' &&
       claimantCompletedFoundClaim(previous, sanitizedClaims, actor)
@@ -1170,6 +1192,389 @@ function routePath(pathname) {
   return pathname.replace(/\/+$/, '') || '/'
 }
 
+function normalizeClassroomDate(value) {
+  const date = String(value || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new HttpError(422, 'CLassROOM_DATE_INVALID', '借阅日期格式应为 YYYY-MM-DD')
+  }
+  const parsed = new Date(`${date}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw new HttpError(422, 'CLASSROOM_DATE_INVALID', '借阅日期无效')
+  }
+  const today = shanghaiDateString()
+  if (date < today) {
+    throw new HttpError(422, 'CLASSROOM_DATE_PAST', '不能申请过去的日期')
+  }
+  const maxDate = new Date(Date.now() + 366 * 86_400_000).toISOString().slice(0, 10)
+  if (date > maxDate) {
+    throw new HttpError(422, 'CLASSROOM_DATE_TOO_FAR', '最多可申请未来一年内的教室')
+  }
+  return date
+}
+
+function normalizeClassroomTime(value, fieldName) {
+  const time = String(value || '').trim()
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new HttpError(422, 'CLASSROOM_TIME_INVALID', `${fieldName}格式应为 HH:mm`)
+  }
+  if (time < '07:00' || time > '22:00') {
+    throw new HttpError(422, 'CLASSROOM_TIME_RANGE', `${fieldName}应位于 07:00–22:00 之间`)
+  }
+  return time
+}
+
+function shanghaiDateTime(date, time) {
+  const value = new Date(`${date}T${time}:00+08:00`)
+  if (Number.isNaN(value.getTime())) {
+    throw new HttpError(422, 'CLASSROOM_DATETIME_INVALID', '借阅时段无效')
+  }
+  return value.toISOString()
+}
+
+function weekdayOf(date) {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay()
+  return day === 0 ? 7 : day
+}
+
+function shanghaiDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function emitClassroomAvailability(event) {
+  classroomAvailabilityVersion += 1
+  const payload = {
+    ...event,
+    availabilityVersion: classroomAvailabilityVersion,
+    occurredAt: nowIso(),
+  }
+  const message = `event: occupancy\ndata: ${JSON.stringify(payload)}\n\n`
+  for (const client of classroomEventClients) {
+    try {
+      client.write(message)
+    } catch {
+      classroomEventClients.delete(client)
+    }
+  }
+  return payload
+}
+
+function groupPickupCode(orderId, userId) {
+  const digest = createHmac('sha256', SETTINGS_KEY)
+    .update(`group-pickup:${orderId}:${userId}`)
+    .digest('hex')
+  const numeric = Number.parseInt(digest.slice(0, 12), 16) % 1_000_000
+  return String(numeric).padStart(6, '0')
+}
+
+function toCents(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount < 0) return 0
+  return Math.round(amount * 100)
+}
+
+function allocateCents(total, weights) {
+  const normalized = weights.map((value) => Math.max(0, Number(value) || 0))
+  const weightTotal = normalized.reduce((sum, value) => sum + value, 0)
+  if (!normalized.length || weightTotal <= 0) return normalized.map(() => 0)
+  const base = normalized.map((value) => Math.floor((total * value) / weightTotal))
+  let remainder = total - base.reduce((sum, value) => sum + value, 0)
+  for (let index = 0; index < base.length && remainder > 0; index += 1) {
+    base[index] += 1
+    remainder -= 1
+  }
+  return base
+}
+
+function ensureGroupbuyCommerce(item) {
+  if (!item || typeof item !== 'object') return null
+  const participants = Array.isArray(item.participants) ? item.participants : []
+  const joinedCount = participants.reduce(
+    (sum, participant) => sum + Math.max(1, Number(participant.count) || 1),
+    0,
+  )
+  const targetCount = Math.max(2, Number(item.targetCount) || 2)
+  const expired =
+    item.deadline && new Date(item.deadline).getTime() <= Date.now()
+  const defaultStatus = joinedCount >= targetCount
+    ? 'formed'
+    : expired
+      ? 'expired'
+      : 'recruiting'
+  const current = item.commerce && typeof item.commerce === 'object'
+    ? item.commerce
+    : {}
+  const rawDeliveryMode = String(current.deliveryMode || item.deliveryMode || 'central')
+  const deliveryMode = ['self', 'central', 'dorm', 'proxy'].includes(rawDeliveryMode)
+    ? rawDeliveryMode
+    : 'central'
+  const commerce = item.commerce && typeof item.commerce === 'object' ? item.commerce : {}
+  Object.assign(commerce, {
+    version: Math.max(2, Number(current.version) || 2),
+    status: String(current.status || item.commerceStatus || defaultStatus),
+    settlementMode: current.settlementMode === 'host_advance' ? 'host_advance' : 'escrow',
+    deliveryMode,
+    deliveryFee: Math.max(0, Number(current.deliveryFee ?? item.deliveryFee) || 0),
+    serviceFeeBps: Math.max(0, Math.min(1000, Number(current.serviceFeeBps) || 0)),
+    splitRunnerTip: current.splitRunnerTip !== false,
+    paymentWindowMinutes: Math.max(5, Math.min(120, Number(current.paymentWindowMinutes) || 15)),
+    formedAt: current.formedAt || null,
+    fundedAt: current.fundedAt || null,
+    purchasedAt: current.purchasedAt || null,
+    shippedAt: current.shippedAt || null,
+    readyAt: current.readyAt || null,
+    completedAt: current.completedAt || null,
+    purchaseReceipt: String(current.purchaseReceipt || ''),
+    deliveryProof: String(current.deliveryProof || ''),
+    quarantinedCents: Math.max(0, Math.round(Number(current.quarantinedCents) || 0)),
+    cancellationReason: String(current.cancellationReason || ''),
+  })
+  item.commerce = commerce
+  return commerce
+}
+
+function groupbuyMemberQuotes(item) {
+  const commerce = ensureGroupbuyCommerce(item)
+  const participants = (item.participants || []).filter(
+    (participant) => Number(participant.count) > 0,
+  )
+  const quantities = participants.map((participant) => Math.max(1, Number(participant.count) || 1))
+  const totalQuantity = quantities.reduce((sum, value) => sum + value, 0)
+  const deliveryCents = toCents(commerce.deliveryFee)
+  const deliveryShares = allocateCents(deliveryCents, quantities)
+  const runnerTipCents = item.errand?.enabled && commerce.splitRunnerTip
+    ? toCents(item.errand.tip)
+    : 0
+  const tipShares = allocateCents(runnerTipCents, quantities)
+  const serviceBps = Number(commerce.serviceFeeBps) || 0
+  const quotes = new Map()
+  participants.forEach((participant, index) => {
+    const quantity = quantities[index]
+    const unitCents = toCents(item.unitPrice)
+    const subtotalCents = unitCents * quantity
+    const serviceCents = Math.round((subtotalCents * serviceBps) / 10_000)
+    const amountCents = subtotalCents + deliveryShares[index] + tipShares[index] + serviceCents
+    const key = participant.userId || `name:${participant.name}`
+    quotes.set(key, {
+      userId: participant.userId || '',
+      name: participant.name,
+      quantity,
+      unitCents,
+      subtotalCents,
+      deliveryCents: deliveryShares[index],
+      runnerTipCents: tipShares[index],
+      serviceCents,
+      amountCents,
+    })
+  })
+  return quotes
+}
+
+function decorateGroupbuyOrder(item, actor) {
+  const commerce = ensureGroupbuyCommerce(item)
+  const participants = Array.isArray(item.participants) ? item.participants : []
+  const quotes = groupbuyMemberQuotes(item)
+  const payments = repo.listGroupPaymentOrders(item.id)
+  const tickets = repo.listGroupPickupTickets(item.id)
+  const ledger = repo.listGroupLedger(item.id)
+  const dispute = repo.getOpenGroupDispute(item.id)
+  const canManage = actor.id === item.ownerId || actor.roleLevel >= 80
+  const viewerQuote = quotes.get(actor.id)
+  const viewerPayments = payments.filter(
+    (payment) => payment.userId === actor.id && !['released', 'failed'].includes(payment.status),
+  )
+  const viewerPaymentCents = viewerPayments.reduce(
+    (sum, payment) => sum + payment.amountCents,
+    0,
+  )
+  const viewerPaymentStatus = viewerPayments.some((payment) => payment.status === 'captured')
+    ? 'captured'
+    : viewerPayments.length
+      ? 'authorized'
+      : 'pending'
+  const capturedCents = payments
+    .filter((payment) => payment.status === 'captured')
+    .reduce((sum, payment) => sum + payment.amountCents, 0)
+  const requiredCents = [...quotes.values()].reduce(
+    (sum, quote) => sum + quote.amountCents,
+    0,
+  )
+  const requiredUsers = participants
+    .map((participant) => participant.userId)
+    .filter(Boolean)
+  const capturedUsers = new Set(
+    payments
+      .filter((payment) => payment.status === 'captured')
+      .map((payment) => payment.userId),
+  )
+  const allPaid = requiredUsers.every((userId) => capturedUsers.has(userId))
+  const viewerTicket = tickets.find((ticket) => ticket.userId === actor.id) || null
+  const publicTickets = canManage
+    ? tickets.map((ticket) => ({
+        ...ticket,
+        code: '',
+      }))
+    : viewerTicket
+      ? [{ ...viewerTicket, code: groupPickupCode(item.id, actor.id) }]
+      : []
+  return {
+    ...item,
+    commerce: {
+      ...commerce,
+      requiredCents,
+      fundedCents: capturedCents,
+      allPaid,
+      participantCount: participants.length,
+      redeemedCount: tickets.filter((ticket) => ticket.status === 'redeemed').length,
+      ticketCount: tickets.length,
+    },
+    participantQuotes: canManage
+      ? participants.map((participant) => {
+          const quote = quotes.get(participant.userId || `name:${participant.name}`)
+          return {
+            userId: participant.userId || '',
+            name: participant.name,
+            count: Number(participant.count) || 1,
+            amountCents: quote?.amountCents || 0,
+          }
+        })
+      : undefined,
+    paymentSummary: canManage
+      ? payments.map((payment) => ({
+          ...payment,
+          pickupStatus:
+            tickets.find((ticket) => ticket.userId === payment.userId)?.status || 'pending',
+        }))
+      : undefined,
+    pickupTickets: publicTickets,
+    ledgerSummary: canManage ? ledger : undefined,
+    dispute,
+    viewer: {
+      isOwner: actor.id === item.ownerId,
+      isParticipant: Boolean(viewerQuote),
+      quantity: viewerQuote?.quantity || 0,
+      paymentStatus: viewerPaymentStatus,
+      payableCents: viewerQuote?.amountCents || 0,
+      paymentCents: viewerPaymentCents,
+      pickupTicket: viewerTicket
+        ? {
+            ...viewerTicket,
+            code:
+              viewerTicket.status === 'pending'
+                ? groupPickupCode(item.id, actor.id)
+                : '',
+          }
+        : null,
+    },
+  }
+}
+
+function normalizeWatchCriteria(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpError(422, 'WATCH_CRITERIA_INVALID', '留意条件格式无效')
+  }
+  const output = {}
+  for (const key of ['item', 'category', 'color', 'place', 'time', 'description']) {
+    output[key] = String(value[key] || '').trim().slice(0, 100)
+  }
+  if (!output.item && !output.description) {
+    throw new HttpError(422, 'WATCH_ITEM_REQUIRED', '请至少填写物品名称或特征描述')
+  }
+  return output
+}
+
+function lostfoundWatchScore(criteria, post) {
+  const item = String(criteria.item || '').trim()
+  const text = `${post.item || ''} ${post.title || ''} ${post.description || ''} ${(
+    post.tags || []
+  ).join(' ')}`.toLowerCase()
+  let score = 0
+  const reasons = []
+  if (item && text.includes(item.toLowerCase())) {
+    score += 45
+    reasons.push('物品名称一致')
+  } else if (criteria.description) {
+    const tokens = String(criteria.description)
+      .toLowerCase()
+      .split(/[\s，。,.;；]+/)
+      .filter((token) => token.length >= 2)
+    const hits = tokens.filter((token) => text.includes(token)).length
+    if (hits) {
+      score += Math.min(35, hits * 10)
+      reasons.push('特征描述相近')
+    }
+  }
+  if (criteria.category && post.category === criteria.category) {
+    score += 20
+    reasons.push('类别一致')
+  }
+  if (criteria.color && `${post.color || ''} ${text}`.includes(criteria.color)) {
+    score += 15
+    reasons.push('颜色一致')
+  }
+  if (criteria.place && `${post.place || ''}`.includes(criteria.place)) {
+    score += 15
+    reasons.push('地点相近')
+  }
+  if (criteria.time && `${post.timeText || ''}`.includes(criteria.time)) {
+    score += 5
+    reasons.push('时间相近')
+  }
+  return { score: Math.min(100, score), reasons }
+}
+
+let classroomMigrationDone = false
+
+function migrateClassroomApplications() {
+  if (classroomMigrationDone) return
+  classroomMigrationDone = true
+  const document = repo.getSharedDocument('classroom')
+  const records = Array.isArray(document?.data) ? document.data : []
+  for (const item of records) {
+    if (!item?.id || !ROOMS_BY_ID.has(item.roomId)) continue
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || ''))) continue
+    if (!/^\d{2}:\d{2}$/.test(String(item.start || ''))) continue
+    if (!/^\d{2}:\d{2}$/.test(String(item.end || ''))) continue
+    const room = ROOMS_BY_ID.get(item.roomId)
+    const startsAt = shanghaiDateTime(item.date, item.start)
+    const endsAt = shanghaiDateTime(item.date, item.end)
+    if (endsAt <= startsAt) continue
+    try {
+      repo.createClassroomApplication({
+        id: item.id,
+        room,
+        date: item.date,
+        day: weekdayOf(item.date),
+        start: item.start,
+        end: item.end,
+        startsAt,
+        endsAt,
+        purpose: String(item.purpose || '教室借用').slice(0, 80),
+        people: Math.max(0, Math.min(500, Number(item.people) || 0)),
+        applicantId: item.applicantId || 'u_monitor_chen',
+        applicantName: item.applicant || '陈子昂',
+        contact: String(item.contact || '站内联系').slice(0, 80),
+        note: String(item.note || '').slice(0, 500),
+        aiReason: String(item.aiReason || '历史申请已迁移').slice(0, 500),
+        blockId: `blk_migrated_${item.id}`,
+        idempotencyKey: `migrate_${item.id}`,
+        holdExpiresAt: new Date(
+          Math.max(Date.now() + 60_000, new Date(item.createdAt || Date.now()).getTime() + 86_400_000),
+        ).toISOString(),
+        initialStatus: item.status === 'approved' ? 'approved' : 'pending',
+      })
+    } catch (error) {
+      console.warn('[classroom] failed to migrate application', item.id, error?.message)
+    }
+  }
+}
+
 async function handleApi(req, res, url) {
   const pathname = routePath(url.pathname)
   const method = req.method || 'GET'
@@ -1294,6 +1699,1074 @@ async function handleApi(req, res, url) {
     const token = bearerToken(req)
     if (token) repo.deleteSession(token)
     sendSuccess(res, { loggedOut: true })
+    return
+  }
+
+  if (method === 'GET' && pathname === '/api/classroom/events') {
+    const actor = authenticate(req, String(url.searchParams.get('token') || ''))
+    requirePermission(actor, 'classroom.apply')
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    res.write(
+      `event: ready\ndata: ${JSON.stringify({
+        availabilityVersion: classroomAvailabilityVersion,
+        connectedAt: nowIso(),
+      })}\n\n`,
+    )
+    classroomEventClients.add(res)
+    const heartbeat = setInterval(() => {
+      if (!classroomEventClients.has(res)) return
+      res.write(`event: ping\ndata: ${JSON.stringify({ time: nowIso() })}\n\n`)
+    }, 20_000)
+    req.on('close', () => {
+      clearInterval(heartbeat)
+      classroomEventClients.delete(res)
+    })
+    return
+  }
+
+  if (method === 'GET' && pathname === '/api/classroom/availability') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'classroom.apply')
+    migrateClassroomApplications()
+    const today = shanghaiDateString()
+    const from = normalizeClassroomDate(url.searchParams.get('from') || today)
+    const defaultTo = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
+    const to = normalizeClassroomDate(url.searchParams.get('to') || defaultTo)
+    if (to < from) {
+      throw new HttpError(422, 'CLASSROOM_RANGE_INVALID', '结束日期不能早于开始日期')
+    }
+    const span = (new Date(`${to}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / 86_400_000
+    if (span > 90) {
+      throw new HttpError(422, 'CLASSROOM_RANGE_TOO_LARGE', '单次最多查询 90 天的教室占用')
+    }
+    const blocks = repo.listRoomBlocks(
+      shanghaiDateTime(from, '00:00'),
+      shanghaiDateTime(to, '23:59'),
+    )
+    const courseBlocks = []
+    const cursor = new Date(`${from}T00:00:00Z`)
+    const endDate = new Date(`${to}T00:00:00Z`)
+    while (cursor <= endDate) {
+      const date = cursor.toISOString().slice(0, 10)
+      const dayOfWeek = weekdayOf(date)
+      for (const room of campusClassrooms) {
+        for (const busy of room.busy || []) {
+          if (Number(busy.day) !== dayOfWeek) continue
+          courseBlocks.push({
+            id: `course:${room.id}:${date}:${busy.start}:${busy.end}`,
+            roomId: room.id,
+            sourceType: 'course',
+            sourceId: `${room.id}:${dayOfWeek}:${busy.start}:${busy.end}`,
+            startsAt: shanghaiDateTime(date, busy.start),
+            endsAt: shanghaiDateTime(date, busy.end),
+            status: 'active',
+            metadata: {
+              label: busy.label || '课程安排',
+              roomCode: room.code,
+              building: room.building,
+            },
+            version: 1,
+          })
+        }
+      }
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+    sendSuccess(res, {
+      from,
+      to,
+      availabilityVersion: classroomAvailabilityVersion,
+      blocks: [...courseBlocks, ...blocks],
+    })
+    return
+  }
+
+  if (method === 'GET' && pathname === '/api/classroom/applications') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'classroom.apply')
+    migrateClassroomApplications()
+    sendSuccess(res, { applications: repo.listClassroomApplications(actor) })
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/classroom/applications') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'classroom.apply')
+    migrateClassroomApplications()
+    const body = await readJson(req)
+    const room = ROOMS_BY_ID.get(String(body.roomId || ''))
+    if (!room) throw new HttpError(404, 'CLASSROOM_NOT_FOUND', '教室不存在')
+    const date = normalizeClassroomDate(body.date)
+    const start = normalizeClassroomTime(body.start, '开始时间')
+    const end = normalizeClassroomTime(body.end, '结束时间')
+    if (end <= start) {
+      throw new HttpError(422, 'CLASSROOM_TIME_ORDER', '结束时间必须晚于开始时间')
+    }
+    const durationMinutes =
+      (new Date(`2000-01-01T${end}:00Z`) - new Date(`2000-01-01T${start}:00Z`)) / 60_000
+    if (durationMinutes > 15 * 60) {
+      throw new HttpError(422, 'CLASSROOM_DURATION_TOO_LONG', '单次借用不能超过 15 小时')
+    }
+    const purpose = String(body.purpose || '').trim().slice(0, 80)
+    if (purpose.length < 2) {
+      throw new HttpError(422, 'CLASSROOM_PURPOSE_REQUIRED', '请填写借用用途')
+    }
+    const people = Math.max(0, Math.min(500, Math.round(Number(body.people) || 0)))
+    if (room.capacity && people > room.capacity) {
+      throw new HttpError(422, 'CLASSROOM_CAPACITY_EXCEEDED', `该教室最多容纳 ${room.capacity} 人`)
+    }
+    const idempotencyKey = String(body.idempotencyKey || '').trim().slice(0, 100)
+    if (!idempotencyKey) {
+      throw new HttpError(422, 'IDEMPOTENCY_KEY_REQUIRED', '缺少请求幂等键')
+    }
+    const createReplay = repo.getGroupActionReceipt(idempotencyKey, actor.id)
+    if (createReplay?.result?.orderId) {
+      const document = repo.getSharedDocument('groupbuy')
+      const existing = (document?.data || []).find(
+        (entry) => entry.id === createReplay.result.orderId,
+      )
+      if (existing) {
+        sendSuccess(res, {
+          item: decorateGroupbuyOrder(existing, actor),
+          version: Number(document.version) || 0,
+          replayed: true,
+        })
+        return
+      }
+    }
+    const startsAt = shanghaiDateTime(date, start)
+    const endsAt = shanghaiDateTime(date, end)
+    const dayOfWeek = weekdayOf(date)
+    const courseConflict = (room.busy || []).find(
+      (block) =>
+        Number(block.day) === dayOfWeek &&
+        block.start < end &&
+        block.end > start,
+    )
+    if (courseConflict) {
+      throw new HttpError(
+        409,
+        'ROOM_TIME_CONFLICT',
+        `该时段已有课程安排：${courseConflict.start}–${courseConflict.end}`,
+        {
+          conflictingBlock: {
+            roomId: room.id,
+            sourceType: 'course',
+            start: courseConflict.start,
+            end: courseConflict.end,
+            label: courseConflict.label || '课程安排',
+          },
+        },
+      )
+    }
+    const id = `ap_${randomUUID()}`
+    const result = repo.createClassroomApplication({
+      id,
+      room,
+      date,
+      day: dayOfWeek,
+      start,
+      end,
+      startsAt,
+      endsAt,
+      purpose,
+      people,
+      applicantId: actor.id,
+      applicantName: actor.name,
+      contact: String(body.contact || '站内联系').trim().slice(0, 80) || '站内联系',
+      note: String(body.note || '').trim().slice(0, 500),
+      aiReason:
+        String(body.aiReason || '').trim().slice(0, 500) ||
+        `${room.building} ${room.code} · ${date} ${start}–${end} 已通过服务端时段校验`,
+      blockId: `blk_${randomUUID()}`,
+      idempotencyKey,
+      holdExpiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+    })
+    if (result.conflict) {
+      const conflictDate = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(result.block.startsAt))
+      const conflictEnd = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date(result.block.endsAt))
+      throw new HttpError(
+        409,
+        'ROOM_TIME_CONFLICT',
+        `该时段已被占用（${result.block.status === 'tentative' ? '审核中' : '已批准'}）：${conflictDate}–${conflictEnd}`,
+        { conflictingBlock: result.block },
+      )
+    }
+    const emitted = emitClassroomAvailability({
+      roomId: room.id,
+      date,
+      start,
+      end,
+      sourceId: result.application.id,
+      status: 'tentative',
+      action: result.existing ? 'idempotent-replay' : 'submitted',
+    })
+    repo.addAuditLog({
+      actorUserId: actor.id,
+      action: '提交教室借用申请',
+      targetType: 'classroom_application',
+      targetId: result.application.id,
+      detail: { roomId: room.id, date, start, end, purpose },
+      ipAddress: clientIp(req),
+    })
+    sendSuccess(
+      res,
+      {
+        application: result.application,
+        existing: result.existing,
+        availabilityVersion: emitted.availabilityVersion,
+      },
+      result.existing ? 200 : 201,
+    )
+    return
+  }
+
+  const classroomReviewMatch = pathname.match(
+    /^\/api\/classroom\/applications\/([^/]+)\/review$/,
+  )
+  if (method === 'POST' && classroomReviewMatch) {
+    const actor = authenticate(req)
+    requirePermission(actor, 'classroom.review', '只有管理员可以审核教室申请')
+    const id = decodeURIComponent(classroomReviewMatch[1])
+    const body = await readJson(req)
+    const action = String(body.action || '')
+    if (!['approve', 'reject'].includes(action)) {
+      throw new HttpError(422, 'CLASSROOM_REVIEW_ACTION_INVALID', '审核动作无效')
+    }
+    const reason = String(body.reason || '').trim().slice(0, 500)
+    const result = repo.closeClassroomApplication(
+      id,
+      actor,
+      action === 'approve' ? 'approved' : 'rejected',
+      reason,
+      true,
+    )
+    if (!result.ok) {
+      if (result.code === 'NOT_FOUND') {
+        throw new HttpError(404, 'CLASSROOM_APPLICATION_NOT_FOUND', '教室申请不存在')
+      }
+      throw new HttpError(409, 'CLASSROOM_APPLICATION_NOT_PENDING', '该申请已被处理')
+    }
+    const app = result.application
+    const emitted = emitClassroomAvailability({
+      roomId: app.roomId,
+      date: app.date,
+      start: app.start,
+      end: app.end,
+      sourceId: app.id,
+      status: action === 'approve' ? 'active' : 'released',
+      action: action === 'approve' ? 'approved' : 'rejected',
+    })
+    repo.createNotification({
+      ownerUserId: app.applicantId,
+      actorUserId: actor.id,
+      type: 'status',
+      title: action === 'approve' ? '教室申请已通过' : '教室申请未通过',
+      content:
+        action === 'approve'
+          ? `${app.building} ${app.roomCode} · ${app.date} ${app.start}–${app.end} 已通过审核。`
+          : `${app.building} ${app.roomCode} · ${app.date} ${app.start}–${app.end}：${reason || '未通过审核'}`,
+      link: `/classroom/status/${app.id}`,
+      important: action === 'approve',
+      sourceType: 'classroom',
+      sourceId: app.id,
+    })
+    repo.addAuditLog({
+      actorUserId: actor.id,
+      action: action === 'approve' ? '通过教室申请' : '驳回教室申请',
+      targetType: 'classroom_application',
+      targetId: app.id,
+      detail: { reason },
+      ipAddress: clientIp(req),
+    })
+    sendSuccess(res, {
+      application: app,
+      availabilityVersion: emitted.availabilityVersion,
+    })
+    return
+  }
+
+  const classroomCancelMatch = pathname.match(
+    /^\/api\/classroom\/applications\/([^/]+)\/cancel$/,
+  )
+  if (method === 'POST' && classroomCancelMatch) {
+    const actor = authenticate(req)
+    requirePermission(actor, 'classroom.apply')
+    const id = decodeURIComponent(classroomCancelMatch[1])
+    const body = await readJson(req)
+    const result = repo.closeClassroomApplication(
+      id,
+      actor,
+      'cancelled',
+      String(body.reason || '申请人取消').trim().slice(0, 500),
+      false,
+    )
+    if (!result.ok) {
+      if (result.code === 'NOT_FOUND') {
+        throw new HttpError(404, 'CLASSROOM_APPLICATION_NOT_FOUND', '教室申请不存在')
+      }
+      if (result.code === 'FORBIDDEN') {
+        throw new HttpError(403, 'CLASSROOM_CANCEL_FORBIDDEN', '只能取消自己的教室申请')
+      }
+      if (result.code === 'ALREADY_ENDED') {
+        throw new HttpError(409, 'CLASSROOM_ALREADY_ENDED', '该借用时段已经结束')
+      }
+      throw new HttpError(409, 'CLASSROOM_CANNOT_CANCEL', '该申请当前不能取消')
+    }
+    const app = result.application
+    const emitted = emitClassroomAvailability({
+      roomId: app.roomId,
+      date: app.date,
+      start: app.start,
+      end: app.end,
+      sourceId: app.id,
+      status: 'released',
+      action: 'cancelled',
+    })
+    sendSuccess(res, {
+      application: app,
+      availabilityVersion: emitted.availabilityVersion,
+    })
+    return
+  }
+
+  if (method === 'GET' && pathname === '/api/lostfound/watches') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'lostfound.use')
+    sendSuccess(res, { watches: repo.listLostfoundWatches(actor.id) })
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/lostfound/watches') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'lostfound.use')
+    const body = await readJson(req)
+    const criteria = normalizeWatchCriteria(body.criteria)
+    const requestedDays = Math.max(1, Math.min(90, Number(body.days) || 30))
+    const watch = repo.createLostfoundWatch({
+      id: `watch_${randomUUID()}`,
+      userId: actor.id,
+      criteria,
+      expiresAt: new Date(Date.now() + requestedDays * 86_400_000).toISOString(),
+    })
+    sendSuccess(res, { watch }, 201)
+    return
+  }
+
+  const lostWatchMatch = pathname.match(/^\/api\/lostfound\/watches\/([^/]+)$/)
+  if (method === 'DELETE' && lostWatchMatch) {
+    const actor = authenticate(req)
+    requirePermission(actor, 'lostfound.use')
+    const closed = repo.closeLostfoundWatch(
+      decodeURIComponent(lostWatchMatch[1]),
+      actor.id,
+    )
+    if (!closed) throw new HttpError(404, 'WATCH_NOT_FOUND', '留意任务不存在或已经关闭')
+    sendSuccess(res, { closed: true })
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/lostfound/watches/match') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'lostfound.use')
+    const body = await readJson(req)
+    const document = repo.getSharedDocument('lostfound')
+    const posts = Array.isArray(document?.data) ? document.data : []
+    const post = posts.find((item) => item.id === String(body.postId || ''))
+    if (!post || post.type !== 'found') {
+      throw new HttpError(404, 'FOUND_POST_NOT_FOUND', '招领信息不存在')
+    }
+    const matches = []
+    for (const watch of repo.listActiveLostfoundWatches()) {
+      if (watch.userId === post.ownerId || watch.userId === post.authorId) continue
+      const scored = lostfoundWatchScore(watch.criteria, post)
+      if (scored.score < 60) continue
+      const notification = repo.createNotification({
+        ownerUserId: watch.userId,
+        actorUserId: actor.id,
+        type: 'match',
+        title: `发现可能匹配的招领信息（${scored.score}%）`,
+        content: `「${post.title}」${scored.reasons.length ? `：${scored.reasons.join('、')}` : ''}`,
+        link: `/lostfound?found=${encodeURIComponent(post.id)}`,
+        important: scored.score >= 80,
+        sourceType: 'lostfound',
+        sourceId: post.id,
+      })
+      if (scored.score >= 80) repo.closeLostfoundWatch(watch.id, watch.userId)
+      matches.push({
+        watchId: watch.id,
+        score: scored.score,
+        reasons: scored.reasons,
+        notificationId: notification?.id || '',
+      })
+    }
+    sendSuccess(res, { matches })
+    return
+  }
+
+  if (method === 'GET' && pathname === '/api/groupbuy/orders') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'groupbuy.use')
+    const document = repo.getSharedDocument('groupbuy')
+    const items = Array.isArray(document?.data) ? document.data : []
+    sendSuccess(res, {
+      items: items.map((item) => decorateGroupbuyOrder(item, actor)),
+      version: Number(document?.version) || 0,
+    })
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/groupbuy/orders') {
+    const actor = authenticate(req)
+    requirePermission(actor, 'groupbuy.use')
+    const body = await readJson(req)
+    const product = String(body.product || '').trim().slice(0, 80)
+    const title = String(body.title || `${product}拼单`).trim().slice(0, 80)
+    const pickup = String(body.pickup || '').trim().slice(0, 80)
+    const unitPrice = Number(body.unitPrice)
+    const targetCount = Math.round(Number(body.targetCount))
+    const myCount = Math.round(Number(body.myCount) || 1)
+    const deadline = new Date(body.deadline)
+    if (title.length < 2 || !product) {
+      throw new HttpError(422, 'GROUPBUY_TITLE_REQUIRED', '请填写拼单标题和商品')
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0.01 || unitPrice > 9999) {
+      throw new HttpError(422, 'GROUPBUY_PRICE_INVALID', '单价应在 0.01–9999 元之间')
+    }
+    if (!Number.isFinite(targetCount) || targetCount < 2 || targetCount > 999) {
+      throw new HttpError(422, 'GROUPBUY_TARGET_INVALID', '目标份数应在 2–999 之间')
+    }
+    if (myCount < 1 || myCount > targetCount) {
+      throw new HttpError(422, 'GROUPBUY_QUANTITY_INVALID', '发起人份数无效')
+    }
+    if (Number.isNaN(deadline.getTime()) || deadline.getTime() <= Date.now() + 5 * 60_000) {
+      throw new HttpError(422, 'GROUPBUY_DEADLINE_INVALID', '截止时间至少应晚于当前时间 5 分钟')
+    }
+    if (deadline.getTime() > Date.now() + 30 * 86_400_000) {
+      throw new HttpError(422, 'GROUPBUY_DEADLINE_TOO_FAR', '拼单截止时间最多设置 30 天')
+    }
+    if (!pickup) throw new HttpError(422, 'GROUPBUY_PICKUP_REQUIRED', '请填写取货点')
+    const id = `gb_${randomUUID()}`
+    const idempotencyKey = String(body.idempotencyKey || '').trim().slice(0, 100)
+    if (!idempotencyKey) {
+      throw new HttpError(422, 'IDEMPOTENCY_KEY_REQUIRED', '缺少请求幂等键')
+    }
+    const deliveryMode = ['self', 'central', 'dorm', 'proxy'].includes(body.deliveryMode)
+      ? body.deliveryMode
+      : 'central'
+    const deliveryFee = Math.max(0, Math.min(500, Number(body.deliveryFee) || 0))
+    const errandEnabled = Boolean(body.errandEnabled)
+    const errandTip = Math.max(0, Math.min(500, Number(body.errandTip) || 0))
+    if (errandEnabled && errandTip <= 0) {
+      throw new HttpError(422, 'GROUPBUY_ERRAND_TIP_INVALID', '跑腿小费必须大于 0')
+    }
+    const item = {
+      id,
+      title,
+      product,
+      category: String(body.category || '其他').trim().slice(0, 30) || '其他',
+      unitPrice: Math.round(unitPrice * 100) / 100,
+      targetCount,
+      participants: [{
+        name: actor.name,
+        userId: actor.id,
+        count: myCount,
+        at: nowIso(),
+      }],
+      deadline: deadline.toISOString(),
+      pickup,
+      owner: actor.name,
+      ownerId: actor.id,
+      note: String(body.note || '').trim().slice(0, 500),
+      tone: ['brand', 'teal', 'amber', 'coral', 'slate'].includes(body.tone)
+        ? body.tone
+        : 'brand',
+      createdAt: nowIso(),
+      notice: String(body.notice || '').trim().slice(0, 500),
+      commerce: {
+        version: 2,
+        status: 'recruiting',
+        settlementMode: body.settlementMode === 'host_advance' ? 'host_advance' : 'escrow',
+        deliveryMode,
+        deliveryFee,
+        serviceFeeBps: 0,
+        splitRunnerTip: true,
+        paymentWindowMinutes: 15,
+        formedAt: null,
+        fundedAt: null,
+        purchasedAt: null,
+        shippedAt: null,
+        readyAt: null,
+        completedAt: null,
+      },
+      errand: errandEnabled
+        ? {
+            enabled: true,
+            tip: errandTip,
+            description: String(body.errandDescription || '').trim().slice(0, 300),
+            status: 'open',
+            runnerId: '',
+            runnerName: '',
+            acceptedAt: null,
+            completedAt: null,
+            confirmedAt: null,
+            cancelledAt: null,
+            cancelReason: '',
+          }
+        : {
+            enabled: false,
+            tip: 0,
+            description: '',
+            status: 'none',
+          },
+    }
+    if (!item.errand.description && errandEnabled) {
+      throw new HttpError(422, 'GROUPBUY_ERRAND_DESCRIPTION_REQUIRED', '请填写跑腿任务说明')
+    }
+    const mutation = repo.mutateSharedDocument('groupbuy', actor.id, (data) => {
+      if (!Array.isArray(data)) data = []
+      const duplicate = data.find((entry) => entry.id === id)
+      if (duplicate) throw new HttpError(409, 'GROUPBUY_DUPLICATE', '拼单已存在')
+      data.unshift(item)
+      const quote = groupbuyMemberQuotes(item).get(actor.id)
+      repo.syncGroupPaymentTotal(
+        id,
+        actor.id,
+        quote?.amountCents || 0,
+        `create:${actor.id}:${id}`,
+      )
+      const authorized = repo
+        .listGroupPaymentOrders(id)
+        .find((payment) => payment.userId === actor.id && payment.status === 'authorized')
+      if (authorized) {
+        repo.addGroupLedgerEntry({
+          id: `ledger_${randomUUID()}`,
+          orderId: id,
+          userId: actor.id,
+          entryType: 'authorization',
+          amountCents: authorized.amountCents,
+          idempotencyKey: `authorization:${authorized.id}`,
+          detail: { mode: 'demo_escrow' },
+        })
+      }
+      repo.saveGroupActionReceipt({
+        idempotencyKey,
+        orderId: id,
+        userId: actor.id,
+        action: 'create',
+        result: { orderId: id },
+      })
+      return { orderId: id }
+    })
+    const created = mutation.data.find((entry) => entry.id === id)
+    sendSuccess(
+      res,
+      { item: decorateGroupbuyOrder(created, actor), version: mutation.version },
+      201,
+    )
+    return
+  }
+
+  const groupbuyActionMatch = pathname.match(/^\/api\/groupbuy\/([^/]+)\/actions$/)
+  if (method === 'POST' && groupbuyActionMatch) {
+    const actor = authenticate(req)
+    requirePermission(actor, 'groupbuy.use')
+    const orderId = decodeURIComponent(groupbuyActionMatch[1])
+    const body = await readJson(req)
+    const action = String(body.action || '').trim()
+    const idempotencyKey = String(body.idempotencyKey || '').trim().slice(0, 100)
+    if (!action || !idempotencyKey) {
+      throw new HttpError(422, 'GROUPBUY_ACTION_INVALID', '缺少操作类型或幂等键')
+    }
+    const replay = repo.getGroupActionReceipt(idempotencyKey, actor.id)
+    if (replay) {
+      if (replay.result?.removed) {
+        sendSuccess(res, { removed: true, replayed: true })
+        return
+      }
+      const document = repo.getSharedDocument('groupbuy')
+      const current = (document?.data || []).find((entry) => entry.id === orderId)
+      if (!current) throw new HttpError(404, 'GROUPBUY_NOT_FOUND', '拼单不存在')
+      sendSuccess(res, {
+        item: decorateGroupbuyOrder(current, actor),
+        replayed: true,
+      })
+      return
+    }
+    const mutation = repo.mutateSharedDocument('groupbuy', actor.id, (data) => {
+      if (!Array.isArray(data)) {
+        throw new HttpError(500, 'GROUPBUY_DATA_INVALID', '拼单数据格式异常')
+      }
+      const insideReplay = repo.getGroupActionReceipt(idempotencyKey, actor.id)
+      if (insideReplay) return { orderId, replayed: true }
+      const item = data.find((entry) => entry.id === orderId)
+      if (!item) throw new HttpError(404, 'GROUPBUY_NOT_FOUND', '拼单不存在')
+      const commerce = ensureGroupbuyCommerce(item)
+      const owner = item.ownerId === actor.id || item.owner === actor.name
+      const manageAll = actor.roleLevel >= 80
+      const participant = (item.participants || []).find(
+        (entry) => entry.userId === actor.id || entry.name === actor.name,
+      )
+      const notify = []
+      const now = nowIso()
+      const requireOwner = () => {
+        if (!owner && !manageAll) {
+          throw new HttpError(403, 'GROUPBUY_OWNER_REQUIRED', '只有发起人可以执行该操作')
+        }
+      }
+      const requireParticipant = () => {
+        if (!participant && !owner && !manageAll) {
+          throw new HttpError(403, 'GROUPBUY_PARTICIPANT_REQUIRED', '只有参与成员可以执行该操作')
+        }
+      }
+      const recalc = () => {
+        const quotes = groupbuyMemberQuotes(item)
+        for (const [key, quote] of quotes) {
+          if (!quote.userId) continue
+          repo.syncGroupPaymentTotal(
+            orderId,
+            quote.userId,
+            quote.amountCents,
+            `quote:${orderId}:${quote.userId}:${commerce.status}:${item.participants.length}`,
+          )
+        }
+        return quotes
+      }
+      const joinedQuantity = () =>
+        (item.participants || []).reduce(
+          (sum, entry) => sum + Math.max(1, Number(entry.count) || 1),
+          0,
+        )
+      const captureFormation = ({ capture = commerce.settlementMode === 'escrow' } = {}) => {
+        recalc()
+        const captured = capture ? repo.captureGroupPayments(orderId) : []
+        for (const payment of captured) {
+          repo.addGroupLedgerEntry({
+            id: `ledger_${randomUUID()}`,
+            orderId,
+            userId: payment.userId,
+            entryType: 'escrow_capture',
+            amountCents: payment.amountCents,
+            idempotencyKey: `capture:${orderId}:${payment.id}`,
+            detail: { mode: commerce.settlementMode },
+          })
+        }
+        const participantIds = (item.participants || [])
+          .map((entry) => entry.userId)
+          .filter((userId) => Boolean(userId) && userId !== item.ownerId)
+        repo.ensureGroupPickupTickets(orderId, participantIds)
+        commerce.formedAt ||= now
+        if (capture) {
+          commerce.status = 'funded'
+          commerce.fundedAt ||= now
+        } else {
+          commerce.status = 'formed'
+        }
+      }
+      if (action === 'join') {
+        if (commerce.status !== 'recruiting') {
+          throw new HttpError(409, 'GROUPBUY_NOT_RECRUITING', '该拼单已停止接龙')
+        }
+        if (new Date(item.deadline).getTime() <= Date.now()) {
+          commerce.status = 'expired'
+          throw new HttpError(409, 'GROUPBUY_EXPIRED', '该拼单已经截止')
+        }
+        const quantity = Math.round(Number(body.quantity) || 1)
+        if (!Number.isFinite(quantity) || quantity < 1 || quantity > 99) {
+          throw new HttpError(422, 'GROUPBUY_QUANTITY_INVALID', '接龙份数应在 1–99 之间')
+        }
+        const remaining = Math.max(0, Number(item.targetCount) - joinedQuantity())
+        if (quantity > remaining) {
+          throw new HttpError(409, 'GROUPBUY_INSUFFICIENT_REMAINING', `剩余仅 ${remaining} 份`)
+        }
+        const existing = (item.participants || []).find(
+          (entry) => entry.userId === actor.id || entry.name === actor.name,
+        )
+        if (existing) existing.count = Math.max(1, Number(existing.count) || 1) + quantity
+        else {
+          item.participants = [
+            ...(item.participants || []),
+            { name: actor.name, userId: actor.id, count: quantity, at: now },
+          ]
+        }
+        const quote = groupbuyMemberQuotes(item).get(actor.id)
+        repo.syncGroupPaymentTotal(
+          orderId,
+          actor.id,
+          quote?.amountCents || 0,
+          `join:${actor.id}:${orderId}:${idempotencyKey}`,
+        )
+        if (joinedQuantity() >= Number(item.targetCount)) {
+          captureFormation()
+          notify.push({
+            ownerUserId: item.ownerId,
+            actorUserId: actor.id,
+            type: 'match',
+            title:
+              commerce.settlementMode === 'host_advance'
+                ? '拼单已成团，等待发起人代付采购'
+                : '拼单成团并完成资金托管',
+            content:
+              commerce.settlementMode === 'host_advance'
+                ? `「${item.title}」已满 ${item.targetCount} 份，请发起人先完成代付采购，成员款项将在采购后进入托管。`
+                : `「${item.title}」已满 ${item.targetCount} 份，成员款项已进入平台托管，可以开始采购。`,
+            link: `/groupbuy/${orderId}`,
+            important: true,
+            sourceType: 'groupbuy',
+            sourceId: orderId,
+          })
+        } else {
+          notify.push({
+            ownerUserId: item.ownerId,
+            actorUserId: actor.id,
+            type: 'status',
+            title: '拼单新增接龙',
+            content: `${actor.name} 接龙 ${quantity} 份，「${item.title}」还差 ${item.targetCount - joinedQuantity()} 份。`,
+            link: `/groupbuy/${orderId}`,
+            sourceType: 'groupbuy',
+            sourceId: orderId,
+          })
+        }
+      } else if (action === 'leave') {
+        if (!participant) throw new HttpError(409, 'GROUPBUY_NOT_JOINED', '你还没有参与该拼单')
+        if (commerce.status !== 'recruiting') {
+          throw new HttpError(409, 'GROUPBUY_LOCKED', '拼单已成团，不能直接取消，请使用取货码转交')
+        }
+        const quantity = Math.max(1, Math.round(Number(body.quantity) || Number(participant.count) || 1))
+        participant.count = Math.max(0, (Number(participant.count) || 1) - quantity)
+        if (participant.count <= 0) {
+          item.participants = item.participants.filter((entry) => entry !== participant)
+          repo.releaseGroupPaymentsForUser(orderId, actor.id)
+        }
+        recalc()
+      } else if (action === 'purchase') {
+        requireOwner()
+        if (commerce.status === 'formed') captureFormation({ capture: true })
+        if (!['funded', 'formed'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_NOT_FUNDED', '所有成员付款完成并进入托管后才能采购')
+        }
+        const payments = repo.listGroupPaymentOrders(orderId)
+        const capturedUsers = new Set(
+          payments.filter((payment) => payment.status === 'captured').map((payment) => payment.userId),
+        )
+        const allCaptured = (item.participants || []).every((entry) =>
+          !entry.userId || capturedUsers.has(entry.userId),
+        )
+        if (!allCaptured) throw new HttpError(409, 'GROUPBUY_NOT_FUNDED', '仍存在未完成托管的成员')
+        commerce.status = 'purchasing'
+        commerce.purchasedAt = now
+        commerce.purchaseReceipt = String(body.receipt || '').trim().slice(0, 300)
+      } else if (action === 'ship') {
+        requireOwner()
+        if (commerce.status !== 'purchasing') {
+          throw new HttpError(409, 'GROUPBUY_NOT_PURCHASED', '请先确认完成采购')
+        }
+        commerce.status = 'shipping'
+        commerce.shippedAt = now
+      } else if (action === 'ready') {
+        requireOwner()
+        if (commerce.status !== 'shipping') {
+          throw new HttpError(409, 'GROUPBUY_NOT_SHIPPING', '请先进入配送状态')
+        }
+        commerce.status = 'ready'
+        commerce.readyAt = now
+        commerce.deliveryProof = String(body.proof || '').trim().slice(0, 300)
+      } else if (action === 'redeem') {
+        requireOwner()
+        if (!['ready', 'completed'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_NOT_READY', '商品尚未到达领取点')
+        }
+        const targetUserId = String(body.userId || '').trim()
+        const targetParticipant = (item.participants || []).find(
+          (entry) => entry.userId === targetUserId,
+        )
+        if (!targetParticipant) throw new HttpError(404, 'GROUPBUY_MEMBER_NOT_FOUND', '参与者不存在')
+        const suppliedCode = String(body.code || '').trim()
+        if (!/^\d{6}$/.test(suppliedCode)) {
+          throw new HttpError(422, 'PICKUP_CODE_INVALID', '取货码应为 6 位数字')
+        }
+        if (suppliedCode !== groupPickupCode(orderId, targetUserId)) {
+          throw new HttpError(403, 'PICKUP_CODE_MISMATCH', '取货码不正确')
+        }
+        if (!repo.redeemGroupPickupTicket(orderId, targetUserId, actor.id)) {
+          throw new HttpError(409, 'PICKUP_ALREADY_REDEEMED', '该成员的物品已领取')
+        }
+        notify.push({
+          ownerUserId: targetUserId,
+          actorUserId: actor.id,
+          type: 'status',
+          title: '拼单物品领取完成',
+          content: `「${item.title}」已完成取货核销。`,
+          link: `/groupbuy/${orderId}`,
+          sourceType: 'groupbuy',
+          sourceId: orderId,
+        })
+        const tickets = repo.listGroupPickupTickets(orderId)
+        if (tickets.length && tickets.every((ticket) => ticket.status === 'redeemed')) {
+          commerce.status = 'completed'
+          commerce.completedAt = now
+          const capturedCents = repo
+            .listGroupPaymentOrders(orderId)
+            .filter((payment) => payment.status === 'captured')
+            .reduce((sum, payment) => sum + payment.amountCents, 0)
+          repo.addGroupLedgerEntry({
+            id: `ledger_${randomUUID()}`,
+            orderId,
+            userId: item.ownerId,
+            entryType: 'release_to_owner',
+            amountCents: capturedCents,
+            idempotencyKey: `release:${orderId}`,
+            detail: { allTicketsRedeemed: true },
+          })
+        }
+      } else if (action === 'confirm_received') {
+        requireParticipant()
+        if (!['ready', 'completed'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_NOT_READY', '商品尚未到达领取点')
+        }
+        const code = String(body.code || '').trim()
+        if (code !== groupPickupCode(orderId, actor.id)) {
+          throw new HttpError(403, 'PICKUP_CODE_MISMATCH', '取货码不正确')
+        }
+        if (!repo.redeemGroupPickupTicket(orderId, actor.id, actor.id)) {
+          throw new HttpError(409, 'PICKUP_ALREADY_REDEEMED', '你已经确认领取')
+        }
+        notify.push({
+          ownerUserId: item.ownerId,
+          actorUserId: actor.id,
+          type: 'status',
+          title: '参与者已确认领取',
+          content: `${actor.name} 已确认收到「${item.title}」。`,
+          link: `/groupbuy/${orderId}`,
+          important: true,
+          sourceType: 'groupbuy',
+          sourceId: orderId,
+        })
+        const tickets = repo.listGroupPickupTickets(orderId)
+        if (tickets.length && tickets.every((ticket) => ticket.status === 'redeemed')) {
+          commerce.status = 'completed'
+          commerce.completedAt = now
+          const capturedCents = repo
+            .listGroupPaymentOrders(orderId)
+            .filter((payment) => payment.status === 'captured')
+            .reduce((sum, payment) => sum + payment.amountCents, 0)
+          repo.addGroupLedgerEntry({
+            id: `ledger_${randomUUID()}`,
+            orderId,
+            userId: item.ownerId,
+            entryType: 'release_to_owner',
+            amountCents: capturedCents,
+            idempotencyKey: `release:${orderId}`,
+            detail: { allTicketsRedeemed: true, completedBy: 'member_confirmation' },
+          })
+        }
+      } else if (action === 'dispute') {
+        requireParticipant()
+        const reason = String(body.reason || '').trim().slice(0, 1000)
+        if (reason.length < 4) {
+          throw new HttpError(422, 'GROUPBUY_DISPUTE_REASON_REQUIRED', '请至少填写 4 个字的争议说明')
+        }
+        if (commerce.status === 'completed') {
+          throw new HttpError(409, 'GROUPBUY_ALREADY_COMPLETED', '已完成的订单不能再次发起争议')
+        }
+        if (!['formed', 'funded', 'purchasing', 'shipping', 'ready'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_DISPUTE_NOT_AVAILABLE', '当前订单状态不能发起交易争议')
+        }
+        if (repo.getOpenGroupDispute(orderId)) {
+          throw new HttpError(409, 'GROUPBUY_DISPUTE_EXISTS', '该拼单已有待处理争议')
+        }
+        repo.createGroupDispute({
+          id: `dispute_${randomUUID()}`,
+          orderId,
+          userId: actor.id,
+          reason,
+        })
+        commerce.status = 'disputed'
+        notify.push({
+          ownerUserId: item.ownerId,
+          actorUserId: actor.id,
+          type: 'status',
+          title: '拼单出现争议，资金已冻结',
+          content: `${actor.name} 对「${item.title}」发起争议：${reason.slice(0, 120)}`,
+          link: `/groupbuy/${orderId}`,
+          important: true,
+          sourceType: 'groupbuy',
+          sourceId: orderId,
+        })
+      } else if (action === 'resolve_dispute') {
+        if (!manageAll) {
+          throw new HttpError(403, 'GROUPBUY_ADMIN_REQUIRED', '只有管理员可以处理交易争议')
+        }
+        const dispute = repo.getOpenGroupDispute(orderId)
+        if (!dispute) throw new HttpError(409, 'GROUPBUY_NO_DISPUTE', '该拼单没有待处理争议')
+        const accepted = Boolean(body.accepted)
+        const resolution = String(body.resolution || '').trim().slice(0, 1000)
+        if (!resolution) throw new HttpError(422, 'DISPUTE_RESOLUTION_REQUIRED', '请填写处理结论')
+        if (accepted) {
+          const refundable = repo
+            .listGroupPaymentOrders(orderId)
+            .filter((payment) => ['authorized', 'captured'].includes(payment.status))
+            .reduce((sum, payment) => sum + payment.amountCents, 0)
+          repo.releaseAllGroupPayments(orderId)
+          repo.expireGroupPickupTickets(orderId)
+          repo.addGroupLedgerEntry({
+            id: `ledger_${randomUUID()}`,
+            orderId,
+            userId: null,
+            entryType: 'dispute_refund',
+            amountCents: refundable,
+            idempotencyKey: `dispute-refund:${dispute.id}`,
+            detail: { resolution },
+          })
+          commerce.status = 'cancelled'
+          commerce.cancellationReason = resolution
+        } else {
+          commerce.status = 'funded'
+        }
+        repo.resolveGroupDispute(dispute.id, actor.id, resolution, accepted)
+        notify.push({
+          ownerUserId: item.ownerId,
+          actorUserId: actor.id,
+          type: 'status',
+          title: accepted ? '交易争议已裁定退款' : '交易争议已驳回',
+          content: `「${item.title}」：${resolution}`,
+          link: `/groupbuy/${orderId}`,
+          important: true,
+          sourceType: 'groupbuy',
+          sourceId: orderId,
+        })
+      } else if (action === 'cancel') {
+        requireOwner()
+        if (!['recruiting', 'formed', 'funded', 'expired'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_CANNOT_CANCEL', '已有资金托管或采购记录，请走退款/争议流程')
+        }
+        const refundable = repo
+          .listGroupPaymentOrders(orderId)
+          .filter((payment) => ['authorized', 'captured'].includes(payment.status))
+          .reduce((sum, payment) => sum + payment.amountCents, 0)
+        repo.releaseAllGroupPayments(orderId)
+        repo.expireGroupPickupTickets(orderId)
+        if (refundable > 0) {
+          repo.addGroupLedgerEntry({
+            id: `ledger_${randomUUID()}`,
+            orderId,
+            userId: null,
+            entryType: 'order_cancel_refund',
+            amountCents: refundable,
+            idempotencyKey: `cancel-refund:${orderId}`,
+            detail: { reason: String(body.reason || '').slice(0, 300) },
+          })
+        }
+        commerce.status = 'cancelled'
+        commerce.cancellationReason = String(body.reason || '发起人取消').slice(0, 500)
+      } else if (action === 'accept_errand') {
+        const errand = item.errand
+        if (!errand?.enabled || errand.status !== 'open') {
+          throw new HttpError(409, 'ERRAND_NOT_OPEN', '该跑腿任务当前不可接取')
+        }
+        if (owner) throw new HttpError(409, 'ERRAND_OWNER_FORBIDDEN', '发起人不能接取自己的跑腿任务')
+        errand.status = 'accepted'
+        errand.runnerId = actor.id
+        errand.runnerName = actor.name
+        errand.acceptedAt = now
+      } else if (action === 'complete_errand') {
+        if (!item.errand?.enabled || item.errand.runnerId !== actor.id) {
+          throw new HttpError(403, 'ERRAND_RUNNER_REQUIRED', '只有当前跑腿者可以标记送达')
+        }
+        if (item.errand.status !== 'accepted') {
+          throw new HttpError(409, 'ERRAND_NOT_ACCEPTED', '跑腿任务当前不在配送中')
+        }
+        item.errand.status = 'delivered'
+        item.errand.completedAt = now
+      } else if (action === 'confirm_errand') {
+        requireOwner()
+        if (item.errand?.status !== 'delivered') {
+          throw new HttpError(409, 'ERRAND_NOT_DELIVERED', '跑腿者尚未标记送达')
+        }
+        item.errand.status = 'settled'
+        item.errand.confirmedAt = now
+        item.errand.settledAmount = Number(item.errand.tip) || 0
+        repo.addGroupLedgerEntry({
+          id: `ledger_${randomUUID()}`,
+          orderId,
+          userId: item.errand.runnerId,
+          entryType: 'runner_tip',
+          amountCents: toCents(item.errand.tip),
+          idempotencyKey: `errand-tip:${orderId}`,
+          detail: { runnerId: item.errand.runnerId },
+        })
+      } else if (action === 'cancel_errand') {
+        requireOwner()
+        if (!['open', 'accepted'].includes(item.errand?.status)) {
+          throw new HttpError(409, 'ERRAND_CANNOT_CANCEL', '当前跑腿状态不能取消')
+        }
+        item.errand.status = 'cancelled'
+        item.errand.cancelledAt = now
+        item.errand.cancelReason = String(body.reason || '发起人取消').slice(0, 300)
+      } else if (action === 'withdraw_errand') {
+        if (item.errand?.runnerId !== actor.id || item.errand.status !== 'accepted') {
+          throw new HttpError(403, 'ERRAND_WITHDRAW_FORBIDDEN', '当前不能退出该跑腿任务')
+        }
+        item.errand.status = 'open'
+        item.errand.runnerId = ''
+        item.errand.runnerName = ''
+        item.errand.cancelReason = String(body.reason || '').slice(0, 300)
+      } else if (action === 'remove') {
+        requireOwner()
+        if (!['cancelled', 'expired', 'recruiting'].includes(commerce.status)) {
+          throw new HttpError(409, 'GROUPBUY_CANNOT_REMOVE', '交易进行中或已完成，不能删除拼单')
+        }
+        if (commerce.status === 'recruiting') repo.releaseAllGroupPayments(orderId)
+        repo.saveGroupActionReceipt({
+          idempotencyKey,
+          orderId,
+          userId: actor.id,
+          action,
+          result: { removed: true },
+        })
+        data.splice(data.indexOf(item), 1)
+        return { orderId, removed: true }
+      } else {
+        throw new HttpError(422, 'GROUPBUY_ACTION_UNSUPPORTED', '不支持的拼单操作')
+      }
+      for (const payload of notify) {
+        if (payload.ownerUserId && payload.ownerUserId !== actor.id) {
+          repo.createNotification(payload)
+        }
+      }
+      repo.saveGroupActionReceipt({
+        idempotencyKey,
+        orderId,
+        userId: actor.id,
+        action,
+        result: { status: commerce.status },
+      })
+      return { orderId }
+    })
+    if (mutation.removed) {
+      sendSuccess(res, { removed: true, version: mutation.version })
+      return
+    }
+    const updated = mutation.data.find((entry) => entry.id === orderId)
+    sendSuccess(res, {
+      item: decorateGroupbuyOrder(updated, actor),
+      version: mutation.version,
+      replayed: Boolean(mutation.replayed),
+    })
     return
   }
 

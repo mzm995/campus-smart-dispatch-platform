@@ -262,7 +262,7 @@ function previousStep() {
 .demo-guide__header {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
 }
 
 .demo-guide__orb {
@@ -272,42 +272,42 @@ function previousStep() {
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #fff;
-  background: linear-gradient(135deg, var(--brand-500), var(--teal-500));
+  background: var(--brand-600);
 }
 
 .demo-guide__header > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
 }
 
 .demo-guide__header strong {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-1);
 }
 
 .demo-guide__header span {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .demo-guide__body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .demo-guide__current {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 11px;
+  padding: 8px 12px;
+  border-radius: 8px;
   color: var(--text-3);
   background: var(--surface-2);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .demo-guide__current b {
@@ -317,16 +317,16 @@ function previousStep() {
 .demo-tour-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 
 .demo-tour-tabs button {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px;
+  gap: 4px;
+  padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface-2);
   text-align: left;
   cursor: pointer;
@@ -338,30 +338,30 @@ function previousStep() {
 }
 
 .demo-tour-tabs .mono {
-  font-size: 8px;
+  font-size: 12px;
   color: var(--brand-500);
 }
 
 .demo-tour-tabs strong {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
 .demo-tour-tabs small {
-  font-size: 8.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .demo-tour-summary {
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-left: 3px solid var(--brand-400);
-  border-radius: 0 10px 10px 0;
+  border-radius: 0 8px 8px 0;
   background: var(--brand-50);
 }
 
 .demo-tour-summary p {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text-2);
 }
@@ -369,7 +369,7 @@ function previousStep() {
 .demo-state-warning {
   margin: 0;
   align-items: flex-start;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -382,10 +382,10 @@ function previousStep() {
 .demo-step {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 11px;
+  gap: 8px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--surface);
   text-align: left;
   cursor: pointer;
@@ -410,25 +410,25 @@ function previousStep() {
   border-radius: 8px;
   color: var(--brand-600);
   background: var(--brand-50);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .demo-step__copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
 
 .demo-step__copy strong {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-1);
 }
 
 .demo-step__copy small {
-  font-size: 9.5px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-3);
 }
@@ -438,21 +438,21 @@ function previousStep() {
 }
 
 .demo-current-step {
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 13px;
+  border-radius: 8px;
   background: var(--surface-2);
 }
 
 .demo-current-step h3 {
-  margin: 9px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   color: var(--text-1);
 }
 
 .demo-current-step p {
-  margin: 5px 0 0;
-  font-size: 10.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.65;
   color: var(--text-3);
 }
@@ -460,7 +460,7 @@ function previousStep() {
 .demo-current-step__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: 12px;
 }
@@ -468,17 +468,17 @@ function previousStep() {
 .demo-guide__note {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
   color: var(--text-3);
   background: var(--amber-50);
-  font-size: 9.5px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .demo-guide__note strong {
-  color: var(--amber-700);
+  color: var(--amber-600);
 }
 
 @media (max-width: 520px) {

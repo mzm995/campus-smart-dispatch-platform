@@ -202,12 +202,6 @@ onMounted(loadDemoAccounts)
 
 <template>
   <div class="login">
-    <div class="login__bg" aria-hidden="true">
-      <span class="login__grid"></span>
-      <span class="login__blob login__blob--brand"></span>
-      <span class="login__blob login__blob--teal"></span>
-      <span class="login__blob login__blob--amber"></span>
-    </div>
 
     <div class="login__shell">
       <main class="login__card">
@@ -215,7 +209,7 @@ onMounted(loadDemoAccounts)
         <section class="login__main" aria-labelledby="login-title">
           <div class="login__topbar">
             <AppLogo :size="38" class="login__logo" />
-            <span class="login__eyebrow">DEMO ACCESS</span>
+            <span class="login__eyebrow">演示环境</span>
           </div>
 
           <div class="login__intro">
@@ -406,7 +400,7 @@ onMounted(loadDemoAccounts)
                 :user-id="account.id"
                 :src="account.avatarUrl"
                 :size="36"
-                :radius="10"
+                :radius="4"
                 alt=""
               />
 
@@ -454,58 +448,10 @@ onMounted(loadDemoAccounts)
   justify-content: center;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 28px clamp(16px, 3vw, 36px);
+  padding: 32px clamp(16px, 3vw, 32px);
   overflow-x: hidden;
   overflow-y: auto;
-  background:
-    radial-gradient(900px 520px at 4% -8%, rgba(108, 99, 255, 0.12), transparent 62%),
-    radial-gradient(760px 460px at 102% 10%, rgba(18, 179, 166, 0.1), transparent 58%),
-    linear-gradient(180deg, #f7f8fc 0%, #eef1f7 100%);
-}
-
-/* ---------- 背景装饰 ---------- */
-.login__bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.login__grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(17, 21, 39, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(17, 21, 39, 0.045) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: 0.7;
-  -webkit-mask-image: radial-gradient(75% 65% at 50% 32%, #000 8%, transparent 78%);
-  mask-image: radial-gradient(75% 65% at 50% 32%, #000 8%, transparent 78%);
-}
-
-.login__blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(84px);
-}
-
-.login__blob--brand {
-  width: 360px;
-  height: 360px;
-  top: -190px;
-  left: -120px;
-  background: rgba(108, 99, 255, 0.14);
-}
-
-.login__blob--teal {
-  width: 320px;
-  height: 320px;
-  right: -150px;
-  bottom: -170px;
-  background: rgba(18, 179, 166, 0.12);
-}
-
-.login__blob--amber {
-  display: none;
+  background: var(--bg);
 }
 
 /* ---------- 卡片骨架 ---------- */
@@ -519,28 +465,15 @@ onMounted(loadDemoAccounts)
 .login__card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.03fr) minmax(0, 0.97fr);
-  height: min(700px, calc(100dvh - 56px));
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  height: min(700px, calc(100dvh - 64px));
   min-height: 620px;
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid rgba(222, 226, 238, 0.92);
-  border-radius: 24px;
-  box-shadow:
-    0 28px 72px -46px rgba(15, 19, 39, 0.35),
-    0 1px 3px rgba(15, 19, 39, 0.04);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
   animation: fade-up 0.45s var(--ease-out) both;
-}
-
-.login__card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
-  height: 2px;
-  background: linear-gradient(90deg, #6c63ff 0%, #12b3a6 100%);
-  opacity: 0.72;
-  pointer-events: none;
 }
 
 /* ==========================================================================
@@ -550,13 +483,11 @@ onMounted(loadDemoAccounts)
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 32px clamp(28px, 3vw, 40px) 26px;
+  padding: 32px clamp(24px, 3vw, 32px) 32px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
-  background:
-    radial-gradient(120% 90% at 0% 0%, rgba(108, 99, 255, 0.04) 0%, transparent 42%),
-    var(--surface);
+  background: var(--surface);
 }
 
 .login__topbar {
@@ -571,41 +502,43 @@ onMounted(loadDemoAccounts)
 }
 
 .login__eyebrow {
-  padding: 5px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  color: var(--text-4);
-  background: rgba(255, 255, 255, 0.7);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  color: var(--brand-600);
+  background: none;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
 }
 
 .login__intro {
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .login__title {
-  font-size: clamp(28px, 2.8vw, 34px);
-  font-weight: 760;
-  line-height: 1.15;
-  letter-spacing: -0.04em;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 2.6vw, 34px);
+  font-weight: 500;
+  line-height: 1.28;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .login__subtitle {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.6;
+  margin-top: 8px;
+  font-size: var(--fs-sm);
+  line-height: 1.65;
   color: var(--text-3);
 }
 
 .login__quick {
   margin: 16px 0 4px;
-  padding: 10px;
-  border: 1px solid rgba(108, 99, 255, 0.12);
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.055), rgba(18, 179, 166, 0.04));
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: none;
 }
 
 .login__quick-head {
@@ -613,32 +546,32 @@ onMounted(loadDemoAccounts)
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
 }
 
 .login__quick-head span {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--brand-700);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-2);
 }
 
 .login__quick-head small {
-  font-size: 9px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
 .login__quick-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 
 .login__quick-grid button {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
-  padding: 7px 4px;
+  padding: 8px 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -652,8 +585,8 @@ onMounted(loadDemoAccounts)
 
 .login__quick-grid button span {
   overflow: hidden;
-  font-size: 10px;
-  font-weight: 650;
+  font-size: var(--fs-xs);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-1);
@@ -661,24 +594,24 @@ onMounted(loadDemoAccounts)
 
 .login__quick-grid button small {
   overflow: hidden;
-  font-size: 8.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-4);
+  color: var(--text-3);
 }
 
 .login__form {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .login__form :deep(.el-form-item) {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .login__form :deep(.el-form-item__label) {
-  padding-bottom: 5px;
+  padding-bottom: 4px;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 
@@ -696,12 +629,12 @@ onMounted(loadDemoAccounts)
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: -2px 0 14px;
-  padding: 8px 11px;
-  border: 1px dashed var(--brand-100);
+  margin: -2px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--brand-100);
   border-radius: var(--radius-sm);
   background: var(--brand-50);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   color: var(--text-3);
 }
@@ -716,21 +649,21 @@ onMounted(loadDemoAccounts)
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
 }
 
 .login__number-copy small {
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.45;
-  color: var(--text-4);
+  color: var(--text-3);
 }
 
 .login__number-value {
   flex: none;
   margin-left: auto;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--brand-600);
 }
@@ -738,12 +671,12 @@ onMounted(loadDemoAccounts)
 .login__selected {
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin: -2px 0 14px;
-  padding: 10px 12px;
+  gap: 12px;
+  margin: -2px 0 12px;
+  padding: 8px 12px;
   border: 1px solid var(--brand-100);
   border-radius: var(--radius);
-  background: linear-gradient(120deg, var(--brand-50), var(--teal-50));
+  background: var(--brand-50);
 }
 
 .login__selected-avatar {
@@ -753,7 +686,7 @@ onMounted(loadDemoAccounts)
   width: 38px;
   height: 38px;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -770,18 +703,18 @@ onMounted(loadDemoAccounts)
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 .login__selected-copy strong {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-1);
 }
 
 .login__selected-copy small {
   overflow: hidden;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -793,17 +726,17 @@ onMounted(loadDemoAccounts)
 }
 
 .login__server-note {
-  margin: -3px 0 13px;
-  padding: 0 2px;
-  font-size: 10.5px;
-  line-height: 1.55;
-  color: var(--text-4);
+  margin: -3px 0 12px;
+  padding: 0 0px;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-3);
 }
 
 .login__invite {
-  margin: -2px 0 10px;
-  color: var(--text-4);
-  font-size: 10.5px;
+  margin: -2px 0 8px;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
 }
 
 .login__invite summary {
@@ -822,14 +755,14 @@ onMounted(loadDemoAccounts)
   width: 100%;
   height: 44px;
   margin-top: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .login__submit-icon {
-  margin-left: 6px;
+  margin-left: 4px;
   font-size: 13px;
   transition: transform var(--dur) var(--ease-out);
 }
@@ -840,18 +773,18 @@ onMounted(loadDemoAccounts)
 
 .login__privacy {
   display: flex;
-  gap: 7px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
   padding-top: 0;
-  font-size: 10.5px;
-  line-height: 1.55;
-  color: var(--text-4);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-3);
 }
 
 .login__privacy-icon {
   flex: none;
-  margin-top: 3px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 /* ==========================================================================
@@ -864,33 +797,9 @@ onMounted(loadDemoAccounts)
   min-width: 0;
   overflow: hidden;
   height: 100%;
-  padding: 32px 26px 24px;
+  padding: 32px 32px 24px;
   border-left: 1px solid var(--line);
-  background: linear-gradient(155deg, #f7f6ff 0%, #fbfbfe 48%, #f4faf8 100%);
-}
-
-.login__demo::before,
-.login__demo::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.login__demo::before {
-  width: 240px;
-  height: 240px;
-  top: -120px;
-  right: -100px;
-  background: radial-gradient(circle, rgba(108, 99, 255, 0.18), transparent 70%);
-}
-
-.login__demo::after {
-  width: 200px;
-  height: 200px;
-  bottom: -110px;
-  left: -80px;
-  background: radial-gradient(circle, rgba(18, 179, 166, 0.16), transparent 70%);
+  background: var(--surface-2);
 }
 
 .login__demo > * {
@@ -908,7 +817,7 @@ onMounted(loadDemoAccounts)
 .login__demo-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -916,32 +825,32 @@ onMounted(loadDemoAccounts)
   display: grid;
   flex: none;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  color: #fff;
-  background: var(--grad-brand);
-  box-shadow: 0 8px 16px -10px rgba(108, 99, 255, 0.9);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-invert);
+  background: var(--brand-600);
 }
 
 .login__demo-title {
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .login__demo-tag {
   height: 22px;
-  padding: 0 9px;
-  font-size: 11px;
+  padding: 0 8px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 
 .login__demo-desc {
-  margin-top: 5px;
-  font-size: 11px;
-  line-height: 1.55;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-3);
 }
 
@@ -949,11 +858,11 @@ onMounted(loadDemoAccounts)
 .login__accounts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 7px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 12px;
   min-height: 0;
   max-height: calc(100% - 100px);
-  padding-right: 3px;
+  padding-right: 4px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
@@ -971,34 +880,32 @@ onMounted(loadDemoAccounts)
 .login__account {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.82);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    transform var(--dur) var(--ease-out),
-    border-color var(--dur) var(--ease-out),
-    background var(--dur) var(--ease-out),
-    box-shadow var(--dur) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .login__account:hover:not(:disabled),
 .login__account.is-active {
-  transform: translateY(-1px);
-  border-color: var(--brand-200);
+  border-color: var(--brand-300);
   background: #fff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
 }
 
 .login__account.is-pending {
   border-color: var(--brand-300);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--brand-200);
 }
 
 .login__account:disabled {
@@ -1016,19 +923,18 @@ onMounted(loadDemoAccounts)
   width: 36px;
   height: 36px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  box-shadow: 0 8px 16px -10px rgba(15, 19, 39, 0.55);
 }
 
 .login__account-meta {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   min-width: 0;
 }
 
@@ -1036,14 +942,14 @@ onMounted(loadDemoAccounts)
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
 .login__account-name {
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   color: var(--text-1);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1053,14 +959,14 @@ onMounted(loadDemoAccounts)
   display: inline-flex;
   flex: none;
   align-items: center;
-  height: 19px;
-  padding: 0 7px;
-  border-radius: var(--radius-pill);
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: var(--brand-50);
   color: var(--brand-700);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -1083,18 +989,18 @@ onMounted(loadDemoAccounts)
   display: inline-flex;
   flex: none;
   align-items: center;
-  height: 19px;
-  padding: 0 7px;
-  border-radius: var(--radius-pill);
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: var(--teal-50);
   color: var(--teal-600);
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .login__account-info {
   overflow: hidden;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1129,20 +1035,20 @@ onMounted(loadDemoAccounts)
 .login__demo-foot {
   margin-top: auto;
   padding-top: 12px;
-  border-top: 1px dashed var(--line-strong);
+  border-top: 1px solid var(--line);
 }
 
 .login__demo-note {
   margin: 0;
-  font-size: 10.5px;
-  letter-spacing: 0.01em;
-  color: var(--text-4);
+  font-size: var(--fs-xs);
+  letter-spacing: 0;
+  color: var(--text-3);
 }
 
 .login__page-foot {
   margin-top: 12px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  letter-spacing: 0;
   text-align: center;
   color: var(--text-4);
 }
@@ -1153,13 +1059,13 @@ onMounted(loadDemoAccounts)
 @media (max-height: 850px) and (min-width: 901px) {
   .login {
     align-items: flex-start;
-    padding-top: 18px;
-    padding-bottom: 18px;
+    padding-top: 16px;
+    padding-bottom: 16px;
   }
 
   .login__main {
-    padding-top: 26px;
-    padding-bottom: 20px;
+    padding-top: 24px;
+    padding-bottom: 16px;
   }
 
   .login__intro {
@@ -1167,11 +1073,11 @@ onMounted(loadDemoAccounts)
   }
 
   .login__form {
-    margin-top: 14px;
+    margin-top: 12px;
   }
 
   .login__form :deep(.el-form-item) {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .login__number,
@@ -1184,12 +1090,12 @@ onMounted(loadDemoAccounts)
   }
 
   .login__privacy {
-    margin-top: 10px;
+    margin-top: 8px;
   }
 
   .login__demo {
-    padding-top: 26px;
-    padding-bottom: 20px;
+    padding-top: 24px;
+    padding-bottom: 16px;
   }
 
   .login__accounts {
@@ -1197,37 +1103,37 @@ onMounted(loadDemoAccounts)
   }
 
   .login__demo-foot {
-    padding-top: 10px;
+    padding-top: 8px;
   }
 }
 
 /* 900–1180：保持双列，整体收紧 */
 @media (max-width: 1180px) {
   .login__main {
-    padding: 34px 30px 28px;
+    padding: 32px 32px 24px;
   }
 
   .login__demo {
-    padding: 34px 28px 28px;
+    padding: 32px 24px 24px;
   }
 
   .login__intro {
-    margin-top: 26px;
+    margin-top: 24px;
   }
 
   .login__form {
-    margin-top: 22px;
+    margin-top: 24px;
   }
 
   .login__account {
-    gap: 10px;
-    padding: 10px 11px;
+    gap: 8px;
+    padding: 8px 12px;
   }
 
   .login__avatar {
     width: 38px;
     height: 38px;
-    border-radius: 12px;
+    border-radius: 8px;
     font-size: 14px;
   }
 }
@@ -1236,7 +1142,7 @@ onMounted(loadDemoAccounts)
 @media (max-width: 900px) {
   .login {
     align-items: flex-start;
-    padding-top: 18px;
+    padding-top: 16px;
     padding-bottom: 24px;
   }
 
@@ -1249,28 +1155,28 @@ onMounted(loadDemoAccounts)
   }
 
   .login__main {
-    padding: 28px 26px 24px;
+    padding: 24px 24px 24px;
     overflow: visible;
   }
 
   .login__demo {
     height: auto;
-    padding: 24px 26px 26px;
+    padding: 24px 24px 24px;
     border-left: 0;
     border-top: 1px solid var(--line);
   }
 
   .login__intro {
-    margin-top: 18px;
+    margin-top: 16px;
   }
 
   .login__privacy {
     margin-top: 0;
-    padding-top: 14px;
+    padding-top: 12px;
   }
 
   .login__demo-foot {
-    padding-top: 14px;
+    padding-top: 12px;
   }
 
   .login__accounts {
@@ -1283,7 +1189,7 @@ onMounted(loadDemoAccounts)
 /* ≤640：内边距收紧、按钮全宽 */
 @media (max-width: 640px) {
   .login {
-    padding: 14px 12px 22px;
+    padding: 12px 12px 24px;
   }
 
   .login__card {
@@ -1291,19 +1197,19 @@ onMounted(loadDemoAccounts)
   }
 
   .login__main {
-    padding: 22px 18px 20px;
+    padding: 24px 16px 16px;
   }
 
   .login__demo {
-    padding: 22px 18px 24px;
+    padding: 24px 16px 24px;
   }
 
   .login__title {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .login__subtitle {
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .login__form {
@@ -1324,12 +1230,12 @@ onMounted(loadDemoAccounts)
   }
 
   .login__quick-grid button span {
-    font-size: 9px;
-    letter-spacing: -0.02em;
+    font-size: 12px;
+    letter-spacing: 0;
   }
 
   .login__quick-grid button small {
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .login__field-grid {
@@ -1353,13 +1259,13 @@ onMounted(loadDemoAccounts)
 
   .login__account {
     gap: 8px;
-    padding: 9px;
+    padding: 8px;
   }
 
   .login__avatar {
     width: 32px;
     height: 32px;
-    border-radius: 9px;
+    border-radius: 8px;
     font-size: 12px;
   }
 
@@ -1372,18 +1278,18 @@ onMounted(loadDemoAccounts)
   }
 
   .login__account-name {
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   .login__role,
   .login__custom-tag {
-    height: 17px;
-    padding: 0 5px;
-    font-size: 9px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 12px;
   }
 
   .login__account-info {
-    font-size: 9.5px;
+    font-size: 12px;
   }
 
   .login__account-college {
@@ -1397,7 +1303,7 @@ onMounted(loadDemoAccounts)
 
   .login__page-foot {
     margin-top: 12px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 </style>

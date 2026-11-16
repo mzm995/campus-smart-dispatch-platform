@@ -28,6 +28,7 @@ import AvatarStack from '@/components/AvatarStack.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import AiBadge from '@/components/AiBadge.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
+import GroupBuyCommercePanel from './components/GroupBuyCommercePanel.vue'
 import { useGroupBuyStore } from '@/stores/groupbuy'
 import { useUserStore } from '@/stores/user'
 import { fmtDateTime, formatMoney, initialOf } from '@/utils/format'
@@ -47,6 +48,14 @@ const fromAi = ref(route.query.from === 'ai')
 const me = computed(() => user.user?.name || '林小满')
 const item = computed(() => groupbuy.getById(route.params.id))
 const status = computed(() => (item.value ? groupbuy.statusOf(item.value) : 'expired'))
+const commerceStatus = computed(() =>
+  item.value ? groupbuy.commerceStatusOf(item.value) : 'expired',
+)
+const commerceText = computed(() =>
+  item.value ? groupbuy.commerceTextOf(item.value) : '已结束',
+)
+const viewer = computed(() => item.value?.viewer || {})
+const myPickupTicket = computed(() => viewer.value.pickupTicket || null)
 const joined = computed(() => (item.value ? groupbuy.joinedCountOf(item.value) : 0))
 const remaining = computed(() => (item.value ? groupbuy.remainingOf(item.value) : 0))
 const progress = computed(() => (item.value ? groupbuy.progressOf(item.value) : 0))
@@ -58,21 +67,40 @@ const errandStatus = computed(() => (item.value ? groupbuy.errandStatusOf(item.v
 const isErrandRunner = computed(() => (item.value ? groupbuy.isErrandRunner(item.value) : false))
 const canAcceptErrand = computed(() => (item.value ? groupbuy.canAcceptErrand(item.value) : false))
 const errandActing = ref(false)
+const commerceActing = ref(false)
+const pickupTargetId = ref('')
+const pickupCode = ref('')
 
 const myCount = computed(() => {
   if (!item.value) return 0
-  const found = (item.value.participants || []).find((p) => p.name === me.value)
+  const found = (item.value.participants || []).find(
+    (participant) =>
+      participant.userId === user.user?.id || participant.name === me.value,
+  )
   return found ? Number(found.count) || 1 : 0
 })
 
 const statusText = computed(() => {
-  if (status.value === 'success') return '已满员成团'
+  if (commerceStatus.value === 'formed') {
+    return item.value?.commerce?.settlementMode === 'host_advance'
+      ? '已满员，等待发起人代付采购'
+      : '已满员，等待资金托管确认'
+  }
+  if (commerceStatus.value === 'funded') return '已满员，资金进入平台托管'
+  if (['purchasing', 'shipping', 'ready', 'completed'].includes(commerceStatus.value)) {
+    return commerceText.value
+  }
   if (status.value === 'expired') return '已过截止时间'
   return `还差 ${remaining.value} 份成团`
 })
 
 const aiRemind = computed(() => {
-  if (status.value === 'success') return '本单已成团，取货提醒已发送给所有参与者。'
+  if (commerceStatus.value === 'completed') return '本单已完成，托管资金已结算。'
+  if (commerceStatus.value === 'ready') return '商品已到领取点，请使用一次性取货码交接。'
+  if (commerceStatus.value === 'formed' && item.value?.commerce?.settlementMode === 'host_advance') {
+    return '拼单已成团，等待发起人代付采购，成员款项将在采购后进入托管。'
+  }
+  if (commerceStatus.value === 'funded') return '所有成员款项已进入托管，等待发起人采购。'
   if (status.value === 'expired') return '本单已结束，历史接龙记录仍会保留。'
   return `还剩 ${remaining.value} 份，满 ${item.value?.targetCount || 0} 份自动成团。`
 })
@@ -114,17 +142,17 @@ function joinTime(row) {
   return row.isOwner ? '发起时加入' : '—'
 }
 
+function moneyFromCents(value) {
+  return (Math.max(0, Number(value) || 0) / 100).toFixed(2)
+}
+
 function backToList() {
   router.push({ path: '/groupbuy' })
 }
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 async function handleJoin() {
   if (!item.value || acting.value) return
-  if (status.value !== 'ongoing') {
+  if (commerceStatus.value !== 'recruiting') {
     ElMessage.warning('该拼单已结束，无法继续接龙')
     return
   }
@@ -134,16 +162,19 @@ async function handleJoin() {
   }
   const amount = Math.min(Math.max(1, Number(count.value) || 1), remaining.value)
   acting.value = true
-  await wait(420)
-  const result = groupbuy.join(item.value.id, amount)
-  acting.value = false
-  if (!result.ok) {
-    ElMessage.warning(result.message)
-    return
+  try {
+    await groupbuy.join(item.value.id, amount)
+    count.value = 1
+    if (['formed', 'funded'].includes(groupbuy.commerceStatusOf(item.value))) {
+      ElMessage.success('接龙成功，已满员并完成资金托管')
+    } else {
+      ElMessage.success(`接龙成功，还差 ${groupbuy.remainingOf(item.value)} 份成团`)
+    }
+  } catch (error) {
+    ElMessage.warning(error?.message || '接龙失败，请刷新后重试')
+  } finally {
+    acting.value = false
   }
-  count.value = 1
-  if (groupbuy.statusOf(item.value) === 'success') ElMessage.success('接龙成功，已满员成团！')
-  else ElMessage.success(`接龙成功，还差 ${groupbuy.remainingOf(item.value)} 份成团`)
 }
 
 async function handleLeaveAll() {
@@ -159,23 +190,29 @@ async function handleLeaveAll() {
   }
   const total = myCount.value
   acting.value = true
-  await wait(320)
-  for (let index = 0; index < total; index += 1) groupbuy.leave(item.value.id)
-  acting.value = false
-  ElMessage.success('已取消接龙')
+  try {
+    await groupbuy.leave(item.value.id, total)
+    ElMessage.success('已取消接龙，冻结金额已释放')
+  } catch (error) {
+    ElMessage.warning(error?.message || '取消接龙失败')
+  } finally {
+    acting.value = false
+  }
 }
 
-function runErrandAction(action, successPrefix = '') {
+async function runErrandAction(action) {
   if (!item.value || errandActing.value) return null
   errandActing.value = true
-  const result = action(item.value.id)
-  errandActing.value = false
-  if (!result.ok) {
-    ElMessage.warning(result.message)
+  try {
+    const result = await action(item.value.id)
+    ElMessage.success('跑腿任务状态已更新')
+    return result
+  } catch (error) {
+    ElMessage.warning(error?.message || '操作失败')
     return null
+  } finally {
+    errandActing.value = false
   }
-  ElMessage.success(successPrefix ? `${successPrefix}${result.message}` : result.message)
-  return result
 }
 
 async function handleAcceptErrand() {
@@ -184,12 +221,11 @@ async function handleAcceptErrand() {
     ElMessage.warning('该跑腿任务状态已变化，请刷新后重试')
     return
   }
-  await wait(260)
-  runErrandAction(groupbuy.acceptErrand, '')
+  await runErrandAction(() => groupbuy.acceptErrand(item.value.id))
 }
 
 function handleCompleteErrand() {
-  runErrandAction(groupbuy.completeErrand, '')
+  runErrandAction(() => groupbuy.completeErrand(item.value.id))
 }
 
 async function handleConfirmErrand() {
@@ -207,7 +243,7 @@ async function handleConfirmErrand() {
   } catch {
     return
   }
-  runErrandAction(groupbuy.confirmErrand)
+  runErrandAction(() => groupbuy.confirmErrand(item.value.id))
 }
 
 async function handleCancelErrand() {
@@ -223,7 +259,9 @@ async function handleCancelErrand() {
         inputValue: '发起人调整了取货安排',
       },
     )
-    runErrandAction((id) => groupbuy.cancelErrandByOwner(id, value || '发起人取消跑腿任务'))
+    await runErrandAction(() =>
+      groupbuy.cancelErrandByOwner(item.value.id, value || '发起人取消跑腿任务'),
+    )
   } catch {
     // 用户取消操作。
   }
@@ -242,7 +280,9 @@ async function handleWithdrawErrand() {
         inputValue: '临时有事，暂时无法继续',
       },
     )
-    runErrandAction((id) => groupbuy.withdrawErrand(id, value || '接单人暂时无法继续'))
+    await runErrandAction(() =>
+      groupbuy.withdrawErrand(item.value.id, value || '接单人暂时无法继续'),
+    )
   } catch {
     // 用户取消操作。
   }
@@ -263,11 +303,18 @@ async function handleEnd() {
   } catch {
     return
   }
-  if (errand.value?.status === 'open') {
-    groupbuy.cancelErrandByOwner(item.value.id, '拼单已由发起人结束')
+  commerceActing.value = true
+  try {
+    if (errand.value?.status === 'open') {
+      await groupbuy.cancelErrandByOwner(item.value.id, '拼单已由发起人结束')
+    }
+    await groupbuy.cancelOrder(item.value.id, '发起人取消尚未成团的拼单')
+    ElMessage.success('拼单已取消，预授权金额已释放')
+  } catch (error) {
+    ElMessage.warning(error?.message || '取消失败')
+  } finally {
+    commerceActing.value = false
   }
-  item.value.deadline = new Date(Date.now() - 60000).toISOString()
-  ElMessage.success('拼单已结束')
 }
 
 async function handleRemove() {
@@ -285,9 +332,118 @@ async function handleRemove() {
   } catch {
     return
   }
-  groupbuy.remove(item.value.id)
-  ElMessage.success('拼单已删除')
-  router.replace({ path: '/groupbuy' })
+  try {
+    await groupbuy.remove(item.value.id)
+    ElMessage.success('拼单已删除')
+    router.replace({ path: '/groupbuy' })
+  } catch (error) {
+    ElMessage.warning(error?.message || '删除失败')
+  }
+}
+
+async function advanceCommerce(action) {
+  if (!item.value || commerceActing.value) return
+  commerceActing.value = true
+  try {
+    if (action === 'purchase') {
+      await groupbuy.purchase(item.value.id, '平台演示采购凭证')
+      ElMessage.success('已确认采购，托管资金仍将在全部领取后释放')
+    } else if (action === 'ship') {
+      await groupbuy.ship(item.value.id)
+      ElMessage.success('已进入配送状态')
+    } else if (action === 'ready') {
+      await groupbuy.markReady(item.value.id, '商品已到达集中领取点')
+      ElMessage.success('已标记到货，成员可取货')
+    }
+  } catch (error) {
+    ElMessage.warning(error?.message || '操作失败')
+  } finally {
+    commerceActing.value = false
+  }
+}
+
+async function redeemForMember() {
+  if (!item.value || !pickupTargetId.value || !/^\d{6}$/.test(pickupCode.value)) {
+    ElMessage.warning('请选择成员并输入对方提供的 6 位取货码')
+    return
+  }
+  commerceActing.value = true
+  try {
+    await groupbuy.redeemPickup(item.value.id, pickupTargetId.value, pickupCode.value)
+    pickupCode.value = ''
+    ElMessage.success('已完成该成员取货核销')
+  } catch (error) {
+    ElMessage.warning(error?.message || '核销失败')
+  } finally {
+    commerceActing.value = false
+  }
+}
+
+async function confirmMyPickup() {
+  if (!item.value || !myPickupTicket.value?.code) return
+  commerceActing.value = true
+  try {
+    await groupbuy.confirmReceived(item.value.id, myPickupTicket.value.code)
+    ElMessage.success('已确认领取，托管资金将在全部交接后结算')
+  } catch (error) {
+    ElMessage.warning(error?.message || '确认领取失败')
+  } finally {
+    commerceActing.value = false
+  }
+}
+
+async function openDispute() {
+  if (!item.value) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '发起争议后相关托管资金会冻结，管理员核对领取与采购凭证后再处理。',
+      '发起交易争议',
+      {
+        confirmButtonText: '提交争议',
+        cancelButtonText: '取消',
+        inputPlaceholder: '说明缺货、破损、未送达或金额问题',
+        inputType: 'textarea',
+      },
+    )
+    if (!String(value || '').trim()) {
+      ElMessage.warning('请填写争议说明')
+      return
+    }
+    await groupbuy.openDispute(item.value.id, value)
+    ElMessage.success('争议已提交，相关资金已冻结')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.warning(error?.message || '提交争议失败')
+    }
+  }
+}
+
+async function resolveDispute(accepted) {
+  if (!item.value?.dispute) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      accepted
+        ? '确认支持退款？相关托管资金将统一退回，已生成的取货码作废。'
+        : '填写驳回争议的依据，托管资金将解除冻结。',
+      accepted ? '支持退款' : '驳回争议',
+      {
+        confirmButtonText: accepted ? '确认退款' : '确认驳回',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '填写处理结论',
+      },
+    )
+    if (!String(value || '').trim()) {
+      ElMessage.warning('请填写处理结论')
+      return
+    }
+    await groupbuy.resolveDispute(item.value.id, accepted, value)
+    ElMessage.success('争议处理结果已记录')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.warning(error?.message || '处理争议失败')
+    }
+  }
 }
 
 watch(remaining, (value) => {
@@ -357,7 +513,7 @@ watch(
             </span>
             <div class="hero-intro">
               <div class="hero-tags">
-                <StatusPill :status="status" />
+                <StatusPill :status="status" :text="commerceText" />
                 <span class="tag-soft" :class="categoryToneClass(item.category)">{{ item.category }}</span>
                 <span v-if="isOwner" class="tag-soft tag-soft--brand">我发起的</span>
                 <span v-else-if="isJoined" class="tag-soft tag-soft--teal">我参与的</span>
@@ -442,7 +598,7 @@ watch(
               </div>
             </div>
 
-            <template v-if="status === 'ongoing'">
+            <template v-if="commerceStatus === 'recruiting'">
               <div class="action-people">
                 <AvatarStack :names="item.participants" :size="26" :max="5" />
                 <span>{{ joined }} 份已被接龙</span>
@@ -463,6 +619,10 @@ watch(
               <p class="action-hint">
                 你已参与 <strong class="mono">{{ myCount }}</strong> 份 · 还差
                 <strong class="mono">{{ remaining }}</strong> 份成团
+              </p>
+              <p class="action-pay-hint">
+                预计冻结 <strong>¥{{ moneyFromCents(viewer.payableCents) }}</strong>
+                （商品 + 已分摊配送/跑腿费），成团后转入平台托管。
               </p>
 
               <el-button
@@ -492,13 +652,42 @@ watch(
                   <CircleCheck v-if="status === 'success'" />
                   <Lock v-else />
                 </el-icon>
-                <strong>{{ status === 'success' ? '已成团' : '已结束' }}</strong>
-                <p v-if="status === 'success'">已满 {{ item.targetCount }} 份，等待发起人统一采购。</p>
-                <p v-else>该拼单已过截止时间，无法继续接龙。</p>
+                <strong>{{ commerceText }}</strong>
+                <p v-if="['formed', 'funded'].includes(commerceStatus)">
+                  已满 {{ item.targetCount }} 份，
+                  {{
+                    commerceStatus === 'formed' && item.commerce?.settlementMode === 'host_advance'
+                      ? '等待发起人代付采购后再进入托管。'
+                      : '成员资金已进入可追溯托管。'
+                  }}
+                </p>
+                <p v-else-if="['purchasing', 'shipping', 'ready'].includes(commerceStatus)">
+                  发起人正在推进采购与配送，状态更新会实时展示。
+                </p>
+                <p v-else>该拼单已结束，历史接龙与资金流水仍会保留。</p>
                 <span v-if="myCount > 0" class="tag-soft tag-soft--teal">你已参与 {{ myCount }} 份</span>
               </div>
             </template>
           </section>
+
+          <GroupBuyCommercePanel
+            v-if="item.commerce"
+            v-model:target-id="pickupTargetId"
+            v-model:pickup-code="pickupCode"
+            :item="item"
+            :commerce-status="commerceStatus"
+            :commerce-text="commerceText"
+            :viewer="viewer"
+            :is-owner="isOwner"
+            :is-admin="user.isAdmin"
+            :my-pickup-ticket="myPickupTicket"
+            :acting="commerceActing"
+            @advance="advanceCommerce"
+            @redeem="redeemForMember"
+            @confirm="confirmMyPickup"
+            @dispute="openDispute"
+            @resolve="resolveDispute"
+          />
 
           <section v-if="errand" class="card side-card errand-card">
             <div class="side-head">
@@ -621,7 +810,7 @@ watch(
                 <el-icon><Bell /></el-icon>
                 <span>截止前自动提醒还没满员的拼单。</span>
               </li>
-              <li :class="status === 'ongoing' ? 'side-list__danger' : ''">
+              <li :class="commerceStatus === 'recruiting' ? 'side-list__danger' : ''">
                 <el-icon><Warning /></el-icon>
                 <span>{{ aiRemind }}</span>
               </li>
@@ -647,11 +836,11 @@ watch(
               </li>
               <li>
                 <el-icon><Check /></el-icon>
-                <span>线下当面交易，取货时先验货再付款。</span>
+                <span>成员款项进入平台托管，取货核验完成后再结算。</span>
               </li>
               <li>
                 <el-icon><Check /></el-icon>
-                <span>不要提前转账给陌生同学，异常情况及时联系辅导员。</span>
+                <span>不要绕过平台私下转账，金额或商品异常可立即发起争议。</span>
               </li>
             </ul>
           </section>
@@ -666,7 +855,10 @@ watch(
             </div>
             <p class="owner-tip">成团后请及时统一采购；结束或删除后，其他同学将无法继续接龙。</p>
             <div class="owner-actions">
-              <el-button :disabled="status !== 'ongoing'" @click="handleEnd">
+              <el-button
+                :disabled="!['recruiting', 'formed', 'funded', 'expired'].includes(commerceStatus) || commerceActing"
+                @click="handleEnd"
+              >
                 <el-icon><SwitchButton /></el-icon>
                 结束拼单
               </el-button>
@@ -721,900 +913,4 @@ watch(
   </div>
 </template>
 
-<style scoped>
-.detail-page {
-  gap: 16px;
-}
-
-.crumb-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.crumb-bar__right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.crumb-created {
-  font-size: 11.5px;
-}
-
-.crumb-bar :deep(.el-breadcrumb__inner) {
-  font-weight: 550;
-}
-
-.crumb-bar__right :deep(.el-icon) {
-  margin-right: 4px;
-}
-
-.ai-banner {
-  align-items: center;
-}
-
-.ai-banner__icon {
-  flex: none;
-  font-size: 16px;
-}
-
-.ai-banner strong {
-  font-size: 12.5px;
-}
-
-.ai-banner p {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.6;
-  opacity: 0.9;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  grid-template-areas:
-    'hero side'
-    'members side';
-  gap: 18px;
-  align-items: start;
-}
-
-/* ---------- 主卡 ---------- */
-.hero-card {
-  grid-area: hero;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-}
-
-.hero-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.hero-art {
-  width: 76px;
-  height: 76px;
-  flex: none;
-  border-radius: 20px;
-  font-size: 30px;
-  font-weight: 760;
-  letter-spacing: -0.02em;
-}
-
-.hero-intro {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.hero-tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.hero-tags .tag-soft {
-  height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
-}
-
-.hero-title {
-  font-size: 24px;
-  font-weight: 760;
-  line-height: 1.32;
-  letter-spacing: -0.03em;
-  color: var(--text-1);
-}
-
-.hero-sub {
-  font-size: 12px;
-  color: var(--text-3);
-  line-height: 1.5;
-}
-
-.hero-ring {
-  flex: none;
-}
-
-.hero-facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.fact {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  min-width: 0;
-}
-
-.fact span {
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.fact strong {
-  font-size: 19px;
-  font-weight: 740;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--text-1);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.fact strong em {
-  margin-left: 2px;
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-3);
-  letter-spacing: 0;
-}
-
-.fact--amber strong {
-  color: var(--amber-600);
-}
-
-.fact--teal strong {
-  color: var(--teal-600);
-}
-
-.price-fact small {
-  margin-right: 1px;
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-
-.price-fact em {
-  font-size: 11px;
-}
-
-.hero-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.hero-progress__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.hero-progress__head strong {
-  font-size: 14px;
-  color: var(--text-1);
-}
-
-.buy-bar {
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  overflow: hidden;
-}
-
-.buy-bar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, var(--brand-500), #948cff);
-  transition: width var(--dur-slow) var(--ease-out);
-}
-
-.tone-teal .buy-bar i {
-  background: linear-gradient(90deg, var(--teal-500), #4fdccf);
-}
-
-.tone-amber .buy-bar i {
-  background: linear-gradient(90deg, var(--amber-500), #ffc766);
-}
-
-.tone-coral .buy-bar i {
-  background: linear-gradient(90deg, var(--coral-500), #ff9f9f);
-}
-
-.tone-slate .buy-bar i {
-  background: linear-gradient(90deg, #98a2bd, #c3cade);
-}
-
-.hero-info {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 0;
-  border-top: 1px dashed var(--line);
-  border-bottom: 1px dashed var(--line);
-}
-
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12.5px;
-  color: var(--text-2);
-}
-
-.info-row .el-icon {
-  flex: none;
-  font-size: 14px;
-  color: var(--text-4);
-}
-
-.info-label {
-  flex: none;
-  width: 58px;
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.info-value {
-  color: var(--text-1);
-  font-weight: 600;
-}
-
-.hero-note {
-  display: flex;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: var(--text-2);
-}
-
-.hero-note__label {
-  flex: none;
-  padding-top: 1px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-3);
-}
-
-/* ---------- 侧栏 ---------- */
-.detail-side {
-  grid-area: side;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-.side-card {
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  padding: 18px;
-}
-
-.side-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.side-head__icon {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 16px;
-}
-
-.side-head__icon--brand {
-  background: var(--brand-50);
-  color: var(--brand-600);
-}
-
-.side-head__icon--teal {
-  background: var(--teal-50);
-  color: var(--teal-600);
-}
-
-.side-head__icon--amber {
-  background: var(--amber-50);
-  color: var(--amber-600);
-}
-
-.side-head__icon--slate {
-  background: var(--surface-3);
-  color: var(--text-2);
-}
-
-.side-head h2 {
-  font-size: 14.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-1);
-}
-
-.side-head p {
-  margin-top: 2px;
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-
-.action-people {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.action-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.action-field__label {
-  flex: none;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.action-field :deep(.el-input-number) {
-  max-width: 160px;
-}
-
-.action-hint {
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.action-hint strong {
-  color: var(--text-1);
-}
-
-.action-btn {
-  width: 100%;
-}
-
-.action-btn :deep(span),
-.action-cancel :deep(span) {
-  letter-spacing: 0.02em;
-}
-
-.action-cancel {
-  width: 100%;
-  margin-left: 0;
-}
-
-.action-people :deep(.stack__item) {
-  border-color: var(--surface-2);
-}
-
-.action-closed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 8px 8px;
-  text-align: center;
-}
-
-.action-closed__icon {
-  font-size: 34px;
-  color: var(--text-4);
-}
-
-.action-closed strong {
-  font-size: 16px;
-  font-weight: 740;
-  color: var(--text-1);
-}
-
-.action-closed p {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.ai-card {
-  background: linear-gradient(160deg, #fbfaff 0%, #ffffff 42%);
-}
-
-.side-list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.side-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--text-2);
-}
-
-.side-list li .el-icon {
-  flex: none;
-  margin-top: 2px;
-  font-size: 14px;
-  color: var(--teal-600);
-}
-
-.side-list__danger,
-.side-list__danger .el-icon {
-  color: var(--coral-600) !important;
-  font-weight: 600;
-}
-
-.side-list--check li .el-icon {
-  color: var(--brand-500);
-}
-
-.ai-card__foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-}
-
-.ai-card__foot .faint {
-  font-size: 10.5px;
-  margin-left: auto;
-}
-
-.owner-tip {
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-3);
-}
-
-.owner-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.owner-actions :deep(.el-button) {
-  margin-left: 0;
-}
-
-.owner-actions :deep(.el-icon) {
-  margin-right: 4px;
-}
-
-/* ---------- 成员 ---------- */
-.members-card {
-  grid-area: members;
-  padding: 20px;
-}
-
-.members-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.members-head__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.members-head h2 {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.members-head .faint {
-  font-size: 11.5px;
-}
-
-.members-table {
-  display: flex;
-  flex-direction: column;
-}
-
-.members-table__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 70px 120px;
-  gap: 10px;
-  padding: 0 10px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-3);
-  border-bottom: 1px solid var(--line);
-}
-
-.members-table__count {
-  text-align: right;
-}
-
-.member-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 70px 120px;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 10px;
-  border-bottom: 1px dashed var(--line);
-}
-
-.member-row:last-child {
-  border-bottom: none;
-}
-
-.member-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.member-avatar {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 700;
-  box-shadow: var(--shadow-xs);
-}
-
-.member-id {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.member-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 640;
-  color: var(--text-1);
-  flex-wrap: wrap;
-}
-
-.member-name .tag-soft {
-  height: 19px;
-  padding: 0 7px;
-  font-size: 10px;
-}
-
-.member-time-mobile {
-  display: none;
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.member-count {
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--text-2);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.member-time {
-  font-size: 11.5px;
-  color: var(--text-3);
-  white-space: nowrap;
-}
-
-.empty-wrap {
-  padding: 8px;
-}
-
-.side-head > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.errand-state {
-  flex: none;
-  padding: 4px 8px;
-  border-radius: var(--radius-pill);
-  color: var(--amber-700);
-  background: var(--amber-50);
-  font-size: 9.5px;
-  font-weight: 700;
-}
-
-.errand-state.is-settled {
-  color: var(--teal-700);
-  background: var(--teal-50);
-}
-
-.errand-state.is-cancelled {
-  color: var(--text-3);
-  background: var(--surface-3);
-}
-
-.errand-task {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 11px 12px;
-  border: 1px solid rgba(245, 166, 35, 0.18);
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(245, 166, 35, 0.08), rgba(255, 255, 255, 0.7));
-}
-
-.errand-task__icon {
-  color: var(--amber-600);
-  font-size: 16px;
-}
-
-.errand-task > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.errand-task strong {
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--text-1);
-}
-
-.errand-task span {
-  font-size: 10px;
-  color: var(--text-3);
-}
-
-.errand-timeline {
-  display: grid;
-  grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
-  align-items: center;
-  gap: 6px;
-}
-
-.errand-timeline span {
-  font-size: 9px;
-  color: var(--text-4);
-  white-space: nowrap;
-}
-
-.errand-timeline span.is-done {
-  color: var(--teal-600);
-  font-weight: 700;
-}
-
-.errand-timeline i {
-  height: 1px;
-  background: var(--line);
-}
-
-.errand-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
-}
-
-.errand-actions p {
-  margin: 0;
-  font-size: 10.5px;
-  line-height: 1.65;
-  color: var(--text-3);
-}
-
-.errand-actions :deep(.el-button) {
-  margin-left: 0;
-}
-
-.errand-result {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 11px 12px;
-  border-radius: 11px;
-  background: var(--surface-2);
-  color: var(--text-3);
-}
-
-.errand-result.is-success {
-  color: var(--teal-600);
-  background: var(--teal-50);
-}
-
-.errand-result > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.errand-result strong {
-  font-size: 11.5px;
-  color: var(--text-1);
-}
-
-.errand-result span {
-  font-size: 10px;
-  line-height: 1.5;
-}
-
-@media (max-width: 1180px) {
-  .hero-title {
-    font-size: 21px;
-  }
-
-  .hero-art {
-    width: 68px;
-    height: 68px;
-    font-size: 26px;
-    border-radius: 18px;
-  }
-}
-
-@media (max-width: 900px) {
-  .detail-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'hero'
-      'side'
-      'members';
-  }
-}
-
-@media (max-width: 640px) {
-  .detail-page {
-    gap: 12px;
-  }
-
-  .crumb-created {
-    display: none;
-  }
-
-  .detail-grid {
-    gap: 12px;
-  }
-
-  .hero-card {
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .hero-head {
-    gap: 12px;
-  }
-
-  .hero-art {
-    width: 58px;
-    height: 58px;
-    border-radius: 16px;
-    font-size: 23px;
-  }
-
-  .hero-title {
-    font-size: 19px;
-  }
-
-  .hero-ring {
-    display: none;
-  }
-
-  .hero-facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .fact {
-    padding: 10px 12px;
-  }
-
-  .fact strong {
-    font-size: 17px;
-  }
-
-  .hero-note {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .side-card {
-    padding: 16px;
-  }
-
-  .members-card {
-    padding: 16px;
-  }
-
-  .members-table__head {
-    display: none;
-  }
-
-  .member-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      'user count'
-      'time count';
-    gap: 4px 10px;
-    padding: 11px 12px;
-    border-bottom: none;
-    border-radius: 12px;
-    background: var(--surface-2);
-    margin-bottom: 8px;
-  }
-
-  .member-user {
-    grid-area: user;
-  }
-
-  .member-count {
-    grid-area: count;
-    align-self: center;
-  }
-
-  .member-time {
-    grid-area: time;
-    padding-left: 42px;
-    font-size: 11px;
-  }
-
-  .member-time-mobile {
-    display: none;
-  }
-}
-</style>
+<style scoped src="./GroupBuyDetailView.css"></style>

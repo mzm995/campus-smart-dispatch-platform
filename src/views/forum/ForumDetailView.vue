@@ -281,7 +281,6 @@ watch(
         </article>
 
         <div class="card ai-summary">
-          <span class="ai-summary__glow" aria-hidden="true"></span>
           <div class="ai-summary__head">
             <span class="ai-summary__orb"><el-icon><MagicStick /></el-icon></span>
             <div class="grow">
@@ -545,13 +544,13 @@ watch(
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   border: none;
   background: none;
   padding: 0;
   color: var(--brand-600);
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   transition: color var(--dur) var(--ease-out);
 }
@@ -564,7 +563,7 @@ watch(
 .crumbs {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: var(--fs-xs);
   color: var(--text-3);
 }
@@ -591,13 +590,13 @@ watch(
 .detail-feed {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
 
 .post-main {
   overflow: hidden;
-  padding: 26px 28px 20px;
+  padding: 24px 24px 16px;
 }
 
 .post-main::before {
@@ -607,7 +606,7 @@ watch(
   top: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--brand-500), var(--teal-500), var(--amber-500));
+  background: var(--brand-500);
 }
 
 .post-main__flags {
@@ -618,11 +617,11 @@ watch(
 }
 
 .post-main__title {
-  margin: 13px 0 0;
+  margin: 12px 0 0;
   font-size: clamp(21px, 2.4vw, 28px);
-  font-weight: 760;
+  font-weight: 700;
   line-height: 1.38;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
@@ -630,9 +629,9 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 17px;
+  margin-top: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .avatar {
@@ -649,7 +648,7 @@ watch(
 .avatar--lg {
   width: 44px;
   height: 44px;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .avatar--sm {
@@ -666,10 +665,10 @@ watch(
 .post-main__name {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   font-size: var(--fs-base);
-  font-weight: 680;
+  font-weight: 600;
   color: var(--text-1);
 }
 
@@ -677,11 +676,11 @@ watch(
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
+  padding: 0 4px;
+  border-radius: 4px;
   background: var(--surface-3);
   color: var(--text-3);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   flex: none;
 }
@@ -694,10 +693,10 @@ watch(
 .post-main__sub {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -712,7 +711,7 @@ watch(
 }
 
 .post-main__content {
-  margin: 18px 0 0;
+  margin: 16px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
   font-size: var(--fs-md);
@@ -723,7 +722,7 @@ watch(
 .post-main__tags {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: 16px;
 }
@@ -731,21 +730,21 @@ watch(
 .post-main__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 17px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .like-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 34px;
-  padding: 0 13px;
+  padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface);
   color: var(--text-2);
   font-size: var(--fs-sm);
@@ -758,7 +757,7 @@ watch(
 }
 
 .like-btn__heart {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -788,27 +787,17 @@ watch(
 .ai-summary {
   position: relative;
   overflow: hidden;
-  padding: 20px 22px;
+  padding: 16px 24px;
   border-color: var(--brand-100);
-  background: linear-gradient(135deg, var(--brand-50), var(--surface) 70%);
+  background: var(--brand-50);
 }
 
-.ai-summary__glow {
-  position: absolute;
-  top: -70px;
-  right: -60px;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(18, 179, 166, 0.16), transparent 68%);
-  pointer-events: none;
-}
 
 .ai-summary__head {
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 12px;
 }
 
 .ai-summary__orb {
@@ -818,11 +807,11 @@ watch(
   width: 36px;
   height: 36px;
   flex: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--brand-500), var(--teal-500));
+  border-radius: 8px;
+  background: var(--brand-600);
   color: #fff;
-  font-size: 17px;
-  box-shadow: 0 8px 18px -10px rgba(108, 99, 255, 0.9);
+  font-size: 18px;
+  box-shadow: none;
 }
 
 .ai-summary__title {
@@ -836,8 +825,8 @@ watch(
 }
 
 .ai-summary__desc {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -846,19 +835,19 @@ watch(
 }
 
 .ai-summary__loading :deep(.think) {
-  padding: 6px 2px 2px;
+  padding: 4px 0px 0px;
 }
 
 .ai-summary__body {
-  margin-top: 11px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--brand-200);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--brand-200);
 }
 
 .ai-summary__meta {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
   font-size: var(--fs-xs);
   color: var(--text-2);
@@ -866,24 +855,24 @@ watch(
 
 .summary-ok {
   color: var(--teal-600);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .summary-live {
   color: var(--amber-600);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .ai-summary__text {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   white-space: pre-wrap;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.85;
   color: var(--text-2);
 }
 
 .ai-summary__cta {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 
 .link-btn {
@@ -902,7 +891,7 @@ watch(
 
 /* ---------- 回复区 ---------- */
 .reply-card {
-  padding: 20px 22px;
+  padding: 16px 24px;
 }
 
 .reply-head {
@@ -916,13 +905,13 @@ watch(
 .reply-head h2 {
   margin: 0;
   font-size: var(--fs-lg);
-  font-weight: 720;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-1);
 }
 
 .reply-head h2 .mono {
-  margin-left: 3px;
+  margin-left: 4px;
   font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text-3);
@@ -931,23 +920,23 @@ watch(
 .reply-sort {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .reply-list {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .reply-item {
   display: flex;
-  gap: 11px;
+  gap: 12px;
   padding: 16px 0;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .reply-item:last-child {
   border-bottom: none;
-  padding-bottom: 6px;
+  padding-bottom: 4px;
 }
 
 .reply-body {
@@ -958,33 +947,33 @@ watch(
 .reply-top {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .reply-author {
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .reply-time {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
 .reply-content {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.85;
   color: var(--text-2);
 }
 
 .reply-foot {
-  margin-top: 7px;
+  margin-top: 8px;
 }
 
 .reply-like {
@@ -995,7 +984,7 @@ watch(
   background: none;
   padding: 0;
   color: var(--text-3);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: color var(--dur) var(--ease-out);
@@ -1011,7 +1000,7 @@ watch(
 }
 
 .reply-empty {
-  padding: 4px 0 2px;
+  padding: 4px 0 0px;
 }
 
 .reply-editor {
@@ -1025,17 +1014,17 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 
 .editor-title {
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .editor-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-4);
 }
 
@@ -1043,16 +1032,16 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .editor-note {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1064,7 +1053,7 @@ watch(
 .detail-side {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
   align-self: start;
 }
@@ -1072,11 +1061,11 @@ watch(
 .similar-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 0;
+  padding: 8px 0;
   border: none;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   cursor: pointer;
@@ -1092,7 +1081,7 @@ watch(
   flex: none;
   width: 40px;
   height: 40px;
-  padding: 2px;
+  padding: 0px;
   border-radius: 50%;
 }
 
@@ -1105,9 +1094,9 @@ watch(
   border-radius: 50%;
   background: var(--surface);
   color: var(--brand-600);
-  font-size: 9.5px;
-  font-weight: 720;
-  letter-spacing: -0.02em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .similar-main {
@@ -1119,7 +1108,7 @@ watch(
 }
 
 .similar-title {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
   color: var(--text-1);
@@ -1138,12 +1127,12 @@ watch(
 
 .similar-reasons .tag-soft {
   height: 18px;
-  padding: 0 6px;
-  font-size: 9.5px;
+  padding: 0 4px;
+  font-size: 12px;
 }
 
 .similar-meta {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1152,9 +1141,9 @@ watch(
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 9px;
+  padding: 8px 8px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   background: none;
   color: var(--text-2);
   font-size: var(--fs-sm);
@@ -1172,7 +1161,7 @@ watch(
 .board-row.is-active {
   background: var(--brand-50);
   color: var(--brand-700);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .board-dot {
@@ -1191,7 +1180,7 @@ watch(
 
 .board-count {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
 }
 
@@ -1203,7 +1192,7 @@ watch(
 .tip-list {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1212,13 +1201,13 @@ watch(
 .tip {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
 }
 
 .tip__no {
   flex: none;
-  padding-top: 1px;
-  font-size: 11px;
+  padding-top: 0px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--brand-500);
 }
@@ -1226,13 +1215,13 @@ watch(
 .tip b {
   display: block;
   font-size: var(--fs-sm);
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .tip p {
-  margin: 3px 0 0;
-  font-size: 11.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   line-height: 1.65;
   color: var(--text-3);
 }
@@ -1240,25 +1229,25 @@ watch(
 .tip-foot {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 13px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
-  font-size: 11px;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-3);
 }
 
 .tip-foot .el-icon {
   flex: none;
-  margin-top: 2px;
+  margin-top: 0px;
   color: var(--teal-600);
 }
 
 /* ---------- 空帖 ---------- */
 .detail-invalid {
   max-width: 620px;
-  margin: 6px auto 0;
+  margin: 4px auto 0;
   padding: 12px;
 }
 
@@ -1269,7 +1258,7 @@ watch(
     top: 90px;
     max-height: calc(100vh - 112px);
     overflow-y: auto;
-    padding-right: 3px;
+    padding-right: 4px;
   }
 
   .detail-side::-webkit-scrollbar {
@@ -1303,7 +1292,7 @@ watch(
   }
 
   .post-main {
-    padding: 19px 16px 16px;
+    padding: 16px 16px 16px;
   }
 
   .post-main__title {
@@ -1311,7 +1300,7 @@ watch(
   }
 
   .post-main__content {
-    font-size: 13.5px;
+    font-size: 13px;
     line-height: 1.85;
   }
 
@@ -1342,7 +1331,7 @@ watch(
   }
 
   .reply-item {
-    gap: 9px;
+    gap: 8px;
   }
 
   .editor-foot {

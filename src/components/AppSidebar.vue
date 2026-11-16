@@ -95,7 +95,7 @@ async function logout() {
 <template>
   <aside class="side" :class="{ 'side--collapsed': collapsed && !mobile, 'side--mobile': mobile }">
     <div class="side__brand">
-      <AppLogo :size="collapsed && !mobile ? 34 : 36" :show-text="!collapsed || mobile" :light="true" />
+      <AppLogo :size="collapsed && !mobile ? 32 : 36" :show-text="!collapsed || mobile" />
     </div>
 
     <nav class="side__nav">
@@ -137,8 +137,8 @@ async function logout() {
           :name="user.user?.name || '游客'"
           :user-id="user.user?.id"
           :src="user.user?.avatarUrl"
-          :size="32"
-          :radius="11"
+          :size="30"
+          :radius="4"
         />
         <div v-if="!collapsed || mobile" class="side__user-info">
           <div class="side__user-name">{{ user.user?.name || '未登录' }}</div>
@@ -159,33 +159,32 @@ async function logout() {
   flex-direction: column;
   width: var(--sidebar-w);
   height: 100%;
-  padding: 20px 14px 16px;
-  color: rgba(255, 255, 255, 0.72);
-  background: radial-gradient(520px 320px at 0% 0%, rgba(108, 99, 255, 0.28), transparent 60%),
-    radial-gradient(420px 300px at 100% 100%, rgba(18, 179, 166, 0.18), transparent 60%),
-    linear-gradient(180deg, #12152b 0%, #141830 55%, #101423 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 24px 16px 16px;
+  color: var(--text-2);
+  background: var(--bg);
+  border-right: 1px solid var(--line);
   transition: width var(--dur) var(--ease-out);
   overflow: hidden;
 }
 
 .side--collapsed {
   width: var(--sidebar-w-collapsed);
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .side--mobile {
   width: 100%;
   border-right: none;
+  background: var(--surface);
 }
 
 .side__brand {
   display: flex;
   align-items: center;
-  height: 44px;
+  height: 40px;
   padding: 0 8px;
-  margin-bottom: 22px;
+  margin-bottom: 32px;
 }
 
 .side--collapsed .side__brand {
@@ -199,7 +198,7 @@ async function logout() {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
   scrollbar-width: none;
 }
 
@@ -210,41 +209,42 @@ async function logout() {
 .side__group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0px;
 }
 
 .side__group-label {
-  padding: 0 10px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.34);
-  text-transform: uppercase;
+  padding: 0 8px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
 }
 
 .side__group-line {
   height: 1px;
   margin: 4px 8px 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--line);
 }
 
 .side__item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   width: 100%;
-  height: 42px;
-  padding: 0 11px;
+  height: 36px;
+  padding: 0 8px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--text-2);
   font-family: inherit;
   font-size: var(--fs-base);
-  font-weight: 550;
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--dur) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
   text-align: left;
 }
 
@@ -254,35 +254,39 @@ async function logout() {
 }
 
 .side__item:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
+  background: var(--surface-3);
+  color: var(--text-1);
 }
 
+/* 选中态：浅钢蓝底 + 左侧 2px 实色竖条 */
 .side__item.is-active {
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.95), rgba(124, 108, 255, 0.8));
-  color: #fff;
-  box-shadow: 0 12px 24px -14px rgba(108, 99, 255, 0.95);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-weight: 600;
 }
 
 .side__item.is-active::before {
   content: '';
   position: absolute;
-  left: -14px;
+  left: -16px;
   top: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 3px 3px 0;
-  background: #a79fff;
+  width: 2px;
+  height: 16px;
+  background: var(--brand-600);
   transform: translateY(-50%);
 }
 
 .side--collapsed .side__item.is-active::before {
-  left: -10px;
+  left: -8px;
 }
 
 .side__icon {
   display: inline-flex;
   flex: none;
+}
+
+.side__item.is-active .side__icon {
+  color: var(--brand-600);
 }
 
 .side__label {
@@ -296,34 +300,41 @@ async function logout() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
+  min-width: 18px;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 4px;
   border-radius: var(--radius-pill);
-  background: rgba(108, 99, 255, 0.9);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.side__count--brand {
+  background: var(--brand-100);
+  color: var(--brand-700);
 }
 
 .side__count--amber {
-  background: var(--amber-500);
-  color: #3a2705;
+  background: var(--amber-100);
+  color: var(--amber-700);
 }
 
 .side__count--coral {
-  background: var(--coral-500);
+  background: var(--coral-100);
+  color: var(--coral-700);
 }
 
 .side__dot {
   position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 6px;
-  height: 6px;
+  top: 8px;
+  right: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--coral-500);
-  box-shadow: 0 0 0 2px #141830;
+  box-shadow: 0 0 0 2px var(--brand-50);
 }
 
 .side__dot--amber {
@@ -331,99 +342,100 @@ async function logout() {
 }
 
 .side__dot--brand {
-  background: var(--brand-400);
+  background: var(--brand-500);
 }
 
 .side__foot {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-top: 14px;
+  padding-top: 16px;
 }
 
 .side__ai {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 11px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-1);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: all var(--dur) var(--ease-out);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .side__ai:hover {
-  background: rgba(108, 99, 255, 0.22);
-  border-color: rgba(146, 136, 255, 0.45);
+  border-color: var(--line-strong);
+  background: var(--surface-2);
 }
 
 .side__ai-orb {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6c63ff, #12b3a6);
-  color: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-600);
+  color: var(--text-invert);
   flex: none;
 }
 
 .side__ai strong {
   display: block;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   letter-spacing: 0.01em;
 }
 
 .side__ai small {
   display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
 }
 
 .side__ai-arrow {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--fs-base);
+  color: var(--text-4);
 }
 
 .side__campus {
-  margin: 0 6px 7px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.3);
+  margin: 0 4px;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+  color: var(--text-4);
 }
 
 .side__user {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .side--collapsed .side__user {
   justify-content: center;
-  padding: 8px 0;
+  padding-top: 12px;
 }
 
 .side__avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  color: var(--text-invert);
+  font-size: var(--fs-xs);
+  font-weight: 600;
   flex: none;
 }
 
@@ -433,18 +445,18 @@ async function logout() {
 }
 
 .side__user-name {
-  font-size: 12px;
-  font-weight: 650;
-  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .side__user-meta {
-  margin-top: 2px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.42);
+  margin-top: 0px;
+  font-size: var(--fs-xs);
+  color: var(--text-4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -457,15 +469,17 @@ async function logout() {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-4);
   cursor: pointer;
-  transition: all var(--dur);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
 
 .side__logout:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--surface-3);
+  color: var(--text-1);
 }
 </style>
