@@ -6,3 +6,6 @@ server/data
 docs
 .git
 *.log
+.env
+.env.*
+!.env.example
