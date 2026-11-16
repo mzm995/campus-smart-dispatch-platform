@@ -8,6 +8,24 @@
 
 ---
 
+## 在线演示（GitHub Pages）
+
+**https://mzm995.github.io/campus-smart-dispatch-platform/**
+
+登录页可直接点“快速演示”免密进入五种角色（学生 / 班委 / 论坛坛主 / 管理员 / 高级管理员）。
+
+该站点是**纯静态演示版**：构建时开启 `VITE_DEMO_API=1`，由 `src/utils/demoApi.js` 在浏览器内模拟后端 API，数据保存在浏览器 localStorage，因此不依赖服务器即可完整体验登录、角色权限、发帖、通知等交互；AI 能力在同一环境下降级为本地规则引擎。若需真实多用户共享数据与 DeepSeek 调用，请按下文“一分钟启动”在本地或服务器运行完整前后端。
+
+重新发布演示站点：
+
+```bash
+VITE_DEMO_API=1 VITE_PAGES_REPO=campus-smart-dispatch-platform npm run build:pages
+```
+
+构建产物（含 `404.html` SPA 回退与 `.nojekyll`）推送至 `gh-pages` 分支即可。
+
+---
+
 ## 一分钟启动
 
 ```bash
