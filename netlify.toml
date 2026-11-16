@@ -1,0 +1,25 @@
+# Netlify 部署配置（Git 仓库自动构建时生效；拖拽 dist 部署则依赖 public/_redirects）
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+# API 不在 Netlify 上模拟；未配置独立 API 域名时明确返回 404，避免返回 HTML。
+[[redirects]]
+  from = "/api/*"
+  to = "/404.html"
+  status = 404
+
+# SPA 回退：只处理非 API 前端路由。
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 带 hash 的构建产物长期缓存
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

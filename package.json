@@ -1,0 +1,43 @@
+{
+  "name": "campus-smart-dispatch-platform",
+  "private": true,
+  "version": "1.3.0",
+  "type": "module",
+  "description": "校园智能调度平台（Vue + Node.js + SQLite）",
+  "scripts": {
+    "deps:check": "node scripts/ensure-deps.mjs --context=manual",
+    "predev": "node scripts/ensure-deps.mjs --context=dev",
+    "dev": "node scripts/dev.mjs",
+    "predev:client": "node scripts/ensure-deps.mjs --context=dev-client",
+    "dev:client": "vite",
+    "dev:server": "node server/index.js",
+    "prebuild": "node scripts/ensure-deps.mjs --context=build",
+    "build": "vite build && node scripts/compress-dist.mjs && node scripts/check-bundle.mjs && node scripts/check-file-size.mjs",
+    "prestart": "node scripts/ensure-deps.mjs --context=start",
+    "start": "node server/index.js",
+    "pretest:backend": "node scripts/ensure-deps.mjs --context=backend-test",
+    "test:backend": "node scripts/test-backend.mjs",
+    "seed": "node scripts/seed.mjs",
+    "backup": "node scripts/backup-db.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "prepreview": "node scripts/ensure-deps.mjs --context=preview",
+    "preview": "vite preview --port 4173",
+    "build:pages": "vite build && node scripts/postbuild-pages.mjs",
+    "build:demo": "vite build && node scripts/postbuild-pages.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "dayjs": "^1.11.13",
+    "element-plus": "^2.11.5",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^6.3.6"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules
+dist
+.tmp
+.qa-shots
+server/data
+docs
+.git
+*.log

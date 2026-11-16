@@ -1,0 +1,6 @@
+# API 不允许回退成 index.html；纯静态预览时明确返回 404。
+/api/*  /404.html  404
+
+# Netlify SPA 回退：仅前端路由交给 index.html，由 Vue Router 接管
+# 该文件会被 Vite 复制到 dist/_redirects，拖拽部署 dist 时同样生效
+/*    /index.html   200

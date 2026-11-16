@@ -1,0 +1,20 @@
+services:
+  campus-smart-dispatch-platform:
+    build: .
+    image: campus-smart-dispatch-platform:local
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+      DATABASE_PATH: /app/data/campus-smart-dispatch-platform.sqlite
+      SECRETS_PATH: /app/data/.secrets-key
+      NOTIFICATION_RETENTION_DAYS: 180
+      AUDIT_RETENTION_DAYS: 365
+    volumes:
+      - campus-smart-dispatch-platform-data:/app/data
+
+volumes:
+  campus-smart-dispatch-platform-data:

@@ -1,0 +1,26 @@
+﻿[runtime][INFO] Preparing Node.js runtime (purpose: verification)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][INFO] No bundled Node.js runtime was found; automatic download will start.
+[runtime][INFO] Fetching Node.js 24 release metadata from https://nodejs.org/dist
+[runtime][INFO] Downloading Node.js v24.22.3 (win-x64)
+[runtime][INFO] Download URL: https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip
+[runtime][INFO] Verifying Node.js archive SHA-256...
+[runtime][OK] Node.js archive checksum verified.
+[runtime][INFO] Extracting Node.js runtime...
+[runtime][OK] Node.js v24.22.3 is ready at E:\campus-smart-dispatch-platform\runtime\node.exe
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
+[runtime][INFO] Preparing Node.js runtime (purpose: incompatible-runtime-test)
+[runtime][INFO] Project directory: E:\campus-smart-dispatch-platform
+[runtime][WARN] Bundled Node.js major version 22 is incompatible or incomplete; it will be replaced.
+[runtime][INFO] Fetching Node.js 24 release metadata from https://nodejs.org/dist
+[runtime][INFO] Downloading Node.js v24.22.3 (win-x64)
+[runtime][INFO] Download URL: https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip
+[runtime][INFO] Verifying Node.js archive SHA-256...
+[runtime][OK] Node.js archive checksum verified.
+[runtime][INFO] Extracting Node.js runtime...
+[runtime][OK] Node.js v24.22.3 is ready at E:\campus-smart-dispatch-platform\runtime\node.exe
+[runtime][INFO] Preparing Node.js runtime (purpose: launcher)
+[runtime][INFO] Project directory: E:\桌面\3333\campus-smart-dispatch-platform
+[runtime][OK] Bundled runtime is ready: Node.js v24.22.3
