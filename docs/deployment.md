@@ -28,6 +28,36 @@ http://127.0.0.1:3001/api/health
 http://127.0.0.1:3001/api/uploads/images/<uuid>.png
 ```
 
+## 当前线上部署：Railway
+
+当前正式演示地址：
+
+```text
+https://campus-smart-dispatch-platform-production.up.railway.app/
+```
+
+部署方式：
+
+- 根目录 `Dockerfile` 使用 Node.js 24 多阶段构建。
+- `railway.json` 指定 Dockerfile 构建、`/api/health` 健康检查和数据卷挂载要求。
+- Railway 连接 GitHub 仓库 `mzm995/campus-smart-dispatch-platform` 的 `main` 分支，提交后自动发布。
+- 容器监听 `3001`，平台对外提供 HTTPS。
+- 持久化数据卷挂载到 `/app/data`，数据库、上传目录和密钥均保存在该目录。
+
+Railway 生产环境变量：
+
+```dotenv
+NODE_ENV=production
+PORT=3001
+HOST=0.0.0.0
+DATABASE_PATH=/app/data/campus-smart-dispatch-platform.sqlite
+SECRETS_PATH=/app/data/.secrets-key
+NOTIFICATION_RETENTION_DAYS=180
+AUDIT_RETENTION_DAYS=365
+```
+
+如需自己的品牌域名，需要在 Railway 服务中添加 Custom Domain，并在域名服务商处按平台提供的目标配置 DNS。域名和 DNS 管理权限是绑定品牌域名的前提。
+
 必须持久化的文件：
 
 - `server/data/campus-smart-dispatch-platform.sqlite`
@@ -151,11 +181,10 @@ npm run build
 - 两个标签页同时修改同一资源时出现冲突选择弹窗。
 - 断网后刷新页面，token 和本地业务缓存仍保留，并显示“使用本地缓存”提示。
 
-## 纯静态预览
+## 纯静态预览（非当前线上入口）
 
-可以把 `dist/` 放到静态服务器，但只能作为界面预览：
+必要时可以把带 `VITE_DEMO_API=1` 的 `dist/` 放到静态服务器，但只能作为界面预览：
 
-- 不能登录。
-- 不能读取账号和权限。
-- 不能使用通知、AI、增量和图片上传接口。
+- 使用浏览器内演示数据，不具备真实的多用户云端同步。
+- 不能作为 SQLite、图片上传和正式账号系统的验收入口。
 - 不要向验收人员提供该地址作为完整演示网址。

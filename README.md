@@ -74,10 +74,10 @@ docker compose up --build
 
 | 方式 | 适合 | 操作 | 网址 |
 | --- | --- | --- | --- |
-| Node 一体化 | 完整功能、演示和正式部署 | `npm ci && npm run build && npm start`，持久化 SQLite 与上传目录 | 自有域名或服务器 IP |
-| 学校服务器 | 国内访问快，推荐 | Node 24 服务 + Nginx 反向代理，同时代理 `/api` 与前端 | 自有域名 |
+| Railway 全栈 | 当前正式演示 | Dockerfile + GitHub `main` 自动部署；前端、API、SQLite 和上传文件同域运行 | 见下方在线地址 |
+| Node 一体化 | 本地或自有服务器 | `npm ci && npm run build && npm start`，持久化 SQLite 与上传目录 | 自有域名或服务器 IP |
+| 学校服务器 | 国内访问快 | Node 24 服务 + Nginx 反向代理，同时代理 `/api` 与前端 | 自有域名 |
 | Netlify / Vercel | 仅前端 CDN | 必须配置独立 `VITE_API_BASE_URL`；平台不能运行当前 SQLite 写服务 | CDN 域名 |
-| 纯静态预览 | 只看界面 | 可以打开页面；本仓库的 GitHub Pages 版本另带浏览器内演示 API（`VITE_DEMO_API=1`），账号、权限、通知与共享数据可用，AI 走本地规则引擎 | 仅用于展示，正式验收请用 Node 一体化部署 |
 
 ```bash
 npm run build        # 产物在 dist/；受限环境用 ./scripts-build.sh
@@ -85,18 +85,18 @@ npm run build        # 产物在 dist/；受限环境用 ./scripts-build.sh
 
 > ⚠️ Node 版本必须为 24+；图片存储在 `server/data/uploads/`，SQLite、上传目录和可选 `.secrets-key` 都需要持久化与备份。Netlify/Vercel 配置已明确禁止把 `/api/*` 回退成 HTML。完整说明见 [docs/deployment.md](docs/deployment.md)。
 
-### 在线演示（GitHub Pages）
+### 在线演示（Railway 全栈）
 
-- 地址：<https://mzm995.github.io/campus-smart-dispatch-platform/>
+- 地址：<https://campus-smart-dispatch-platform-production.up.railway.app/>
+- 健康检查：<https://campus-smart-dispatch-platform-production.up.railway.app/api/health>
 - 仓库：<https://github.com/mzm995/campus-smart-dispatch-platform>
-- 说明：Pages 只能跑静态文件，因此构建时注入 `src/utils/demoApi.js`（浏览器内 `fetch` 拦截层，用 localStorage 复刻 `server/index.js` 的接口契约）。演示账号、角色权限、通知、四场景共享数据与系统设置照常工作；AI 接口返回 `AI_KEY_NOT_CONFIGURED`，前端自动切到本地规则引擎。真实的多用户云端同步与 DeepSeek 调用仍需 Node 一体化部署。
+- 说明：当前地址由 Node.js 24 服务同时提供前端与 `/api`，使用 SQLite 保存账号、权限、通知和业务数据，并提供图片上传。数据库、上传文件和密钥统一持久化在 Railway 的 `/app/data` 数据卷中。
+- 自动发布：Railway 已连接 GitHub 仓库的 `main` 分支。推送新提交后会按根目录 `Dockerfile` 自动构建和发布。
 
-重新发布：
+手动发布可使用 Railway CLI：
 
 ```bash
-VITE_DEMO_API=1 VITE_PAGES_REPO=campus-smart-dispatch-platform npx vite build
-node scripts/postbuild-pages.mjs        # 生成 404.html（深链接回退）与 .nojekyll
-# 把 dist/ 内容推到 gh-pages 分支即可
+railway up --service campus-smart-dispatch-platform
 ```
 
 ---
