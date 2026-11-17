@@ -27,6 +27,7 @@ import SceneIcon from '@/components/SceneIcon.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import PermissionManager from './system/PermissionManager.vue'
 import ResetAllContentCard from './system/ResetAllContentCard.vue'
+import RestoreGroupbuyCard from './system/RestoreGroupbuyCard.vue'
 import { useUserStore } from '@/stores/user'
 import { useDispatchStore } from '@/stores/dispatch'
 import { apiRequest } from '@/utils/api'
@@ -914,6 +915,8 @@ function tableRowClass({ row }) {
               {{ onlineScenes === 4 ? '四个场景均已上线' : `当前 ${onlineScenes} / 4 个场景上线` }}
             </p>
           </SectionCard>
+
+          <RestoreGroupbuyCard />
 
           <SectionCard
             title="AI 参数"

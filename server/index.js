@@ -6,7 +6,10 @@ import { createHmac, randomUUID } from 'node:crypto'
 import { loadEnvFile } from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { openDatabase, createDatabaseRepository } from './db.js'
-import { classrooms as campusClassrooms } from '../src/mock/seed.js'
+import {
+  classrooms as campusClassrooms,
+  groupBuys as demoGroupBuys,
+} from '../src/mock/seed.js'
 import { verifyPassword } from './passwords.js'
 import {
   canAccessModule,
@@ -57,6 +60,14 @@ const DEEPSEEK_MODEL = 'deepseek-flash'
 const DEEPSEEK_MODEL_NAME = 'DeepSeek-V4.1-Flash'
 const SETTINGS_KEY = loadEncryptionKey(SECRET_PATH)
 const aiRequestWindows = new Map()
+const GROUPBUY_DEMO_TIMING = {
+  gb_001: { createdHoursAgo: 9, deadlineDays: 2, deadlineHour: 20 },
+  gb_002: { createdHoursAgo: 22, deadlineDays: 1, deadlineHour: 18 },
+  gb_003: { createdHoursAgo: 30, deadlineDays: 1, deadlineHour: 21 },
+  gb_004: { createdHoursAgo: 4, deadlineDays: 1, deadlineHour: 22 },
+  gb_005: { createdHoursAgo: 12, deadlineDays: 3, deadlineHour: 18 },
+  gb_006: { createdHoursAgo: 52, deadlineDays: -1, deadlineHour: 18 },
+}
 
 class HttpError extends Error {
   constructor(status, code, message, details) {
@@ -65,6 +76,33 @@ class HttpError extends Error {
     this.code = code
     this.details = details
   }
+}
+
+function buildGroupbuyDemoData(users) {
+  const userIdByName = new Map(
+    users
+      .filter((user) => !user.isDeleted)
+      .map((user) => [user.name, user.id]),
+  )
+  const now = Date.now()
+  return demoGroupBuys.map((template) => {
+    const timing = GROUPBUY_DEMO_TIMING[template.id]
+    const deadline = new Date()
+    deadline.setDate(deadline.getDate() + (timing?.deadlineDays || 0))
+    deadline.setHours(timing?.deadlineHour || 20, 0, 0, 0)
+    return {
+      ...structuredClone(template),
+      ownerId: userIdByName.get(template.owner) || '',
+      participants: template.participants.map((participant) => ({
+        ...participant,
+        userId: userIdByName.get(participant.name) || '',
+      })),
+      createdAt: new Date(
+        now - (timing?.createdHoursAgo || 0) * 60 * 60 * 1000,
+      ).toISOString(),
+      deadline: deadline.toISOString(),
+    }
+  })
 }
 
 const db = openDatabase(DB_PATH)
@@ -3548,6 +3586,30 @@ async function handleApi(req, res, url) {
       actorUserId: actor.id,
       action: '重置共享演示数据',
       targetType: 'demo_data',
+      detail: result,
+      ipAddress: clientIp(req),
+    })
+    sendSuccess(res, result)
+    return
+  }
+
+  if (method === 'POST' && pathname === '/api/system/restore-groupbuy') {
+    const actor = requireSuperAdmin(req)
+    const body = await readJson(req)
+    if (String(body.confirmation || '').trim() !== '还原拼单原始数据') {
+      throw new HttpError(
+        422,
+        'GROUPBUY_RESTORE_CONFIRMATION_REQUIRED',
+        '请输入“还原拼单原始数据”确认本次操作',
+      )
+    }
+    const data = buildGroupbuyDemoData(repo.listUsers())
+    const result = repo.restoreGroupbuyDemoData(data, actor.id)
+    repo.addAuditLog({
+      actorUserId: actor.id,
+      action: '还原拼单原始数据',
+      targetType: 'groupbuy',
+      targetId: 'groupbuy',
       detail: result,
       ipAddress: clientIp(req),
     })

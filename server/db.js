@@ -2243,6 +2243,53 @@ export function createDatabaseRepository(db) {
     }
   }
 
+  function restoreGroupbuyDemoData(data, userId) {
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = {
+        itemCount: Array.isArray(data) ? data.length : 0,
+        groupPaymentOrders: Number(
+          db.prepare('DELETE FROM group_payment_orders').run().changes,
+        ),
+        groupLedgerEntries: Number(
+          db.prepare('DELETE FROM group_ledger_entries').run().changes,
+        ),
+        groupPickupTickets: Number(
+          db.prepare('DELETE FROM group_pickup_tickets').run().changes,
+        ),
+        groupDisputes: Number(
+          db.prepare('DELETE FROM group_disputes').run().changes,
+        ),
+        groupActionReceipts: Number(
+          db.prepare('DELETE FROM group_action_receipts').run().changes,
+        ),
+        notifications: Number(
+          db.prepare("DELETE FROM notifications WHERE source_type = 'groupbuy'")
+            .run().changes,
+        ),
+      }
+      const current = db.prepare(`
+        SELECT version FROM shared_documents WHERE resource_key = 'groupbuy'
+      `).get()
+      const version = (current ? Number(current.version) : 0) + 1
+      const updatedAt = nowIso()
+      db.prepare(`
+        INSERT INTO shared_documents(resource_key, data_json, version, updated_at, updated_by)
+        VALUES ('groupbuy', ?, ?, ?, ?)
+        ON CONFLICT(resource_key) DO UPDATE SET
+          data_json = excluded.data_json,
+          version = excluded.version,
+          updated_at = excluded.updated_at,
+          updated_by = excluded.updated_by
+      `).run(JSON.stringify(data), version, updatedAt, userId)
+      db.exec('COMMIT')
+      return { ...result, version, updatedAt }
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   function resetDemoData() {
     db.exec('BEGIN IMMEDIATE')
     try {
@@ -2350,6 +2397,7 @@ export function createDatabaseRepository(db) {
     listAiUsage,
     cleanupExpiredData,
     resetAllContent,
+    restoreGroupbuyDemoData,
     resetDemoData,
     health,
   }

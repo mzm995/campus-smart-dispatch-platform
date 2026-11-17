@@ -1132,6 +1132,48 @@ try {
     'demo reset did not clear shared documents',
   )
 
+  const restoreGroupbuyDenied = await request('/system/restore-groupbuy', {
+    method: 'POST',
+    token: demoStudentToken,
+    body: { confirmation: '还原拼单原始数据' },
+  })
+  assert(
+    restoreGroupbuyDenied.status === 403,
+    'student accessed groupbuy restore endpoint',
+  )
+  const restoreGroupbuyUnconfirmed = await request('/system/restore-groupbuy', {
+    method: 'POST',
+    token: superToken,
+    body: { confirmation: '还原' },
+  })
+  assert(
+    restoreGroupbuyUnconfirmed.status === 422 &&
+      restoreGroupbuyUnconfirmed.json.error.code ===
+        'GROUPBUY_RESTORE_CONFIRMATION_REQUIRED',
+    'groupbuy restore accepted an incomplete confirmation',
+  )
+  const restoreGroupbuy = await request('/system/restore-groupbuy', {
+    method: 'POST',
+    token: superToken,
+    body: { confirmation: '还原拼单原始数据' },
+  })
+  assert(
+    restoreGroupbuy.status === 200 &&
+      restoreGroupbuy.json.data.itemCount === 6 &&
+      restoreGroupbuy.json.data.version >= 1,
+    'groupbuy restore did not recreate the original orders',
+  )
+  const restoredOrders = await request('/groupbuy/orders', { token: superToken })
+  assert(
+    restoredOrders.json.data.items.length === 6 &&
+      restoredOrders.json.data.items.filter(
+        (item) => item.commerce?.status === 'recruiting',
+      ).length === 5 &&
+      restoredOrders.json.data.items.find((item) => item.id === 'gb_001')?.ownerId ===
+        'u_student_lin',
+    'restored groupbuy orders are incomplete or expired',
+  )
+
   const resetAllDenied = await request('/system/reset-all', {
     method: 'POST',
     token: demoStudentToken,
